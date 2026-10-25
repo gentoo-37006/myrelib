@@ -1,0 +1,26 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'com.google.devtools.ksp'
+
+android {
+    namespace = 'org.firstinspires.ftc.teamcode'
+    compileSdk 36
+    defaultConfig { minSdk 24 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+    testOptions { unitTests.returnDefaultValues = true }
+}
+
+repositories {
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots' }
+    maven { url 'https://repo.dairy.foundation/releases/' }
+}
+
+dependencies {
+    implementation project(':myrelib')
+    ksp project(':processor')
+    testImplementation 'junit:junit:4.13.2'
+}

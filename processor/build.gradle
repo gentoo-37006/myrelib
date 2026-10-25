@@ -1,0 +1,36 @@
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+evaluationDependsOn(':myrelib')
+
+configurations {
+    ftcProcessorApi { transitive = false }
+}
+
+def extractFtcProcessorApi = tasks.register('extractFtcProcessorApi', Sync) {
+    from { configurations.ftcProcessorApi.collect { zipTree(it) } }
+    include 'classes.jar'
+    into layout.buildDirectory.dir('intermediates/ftc-processor-api')
+}
+
+def ftcProcessorClasses = files(
+    layout.buildDirectory.file('intermediates/ftc-processor-api/classes.jar')
+) {
+    builtBy extractFtcProcessorApi
+}
+
+// Target Java 17 without requiring an exactly matching installed toolchain.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+kotlin {
+    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 }
+}
+
+dependencies {
+    implementation "com.google.devtools.ksp:symbol-processing-api:${kspVersion}"
+    implementation files(project(':myrelib').tasks.named('bundleLibCompileToJarRelease'))
+    implementation ftcProcessorClasses
+    ftcProcessorApi "org.firstinspires.ftc:RobotCore:${ftcSdkVersion}"
+    testImplementation 'junit:junit:4.13.2'
+}

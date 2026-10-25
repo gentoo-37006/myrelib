@@ -1,0 +1,27 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace = 'gentoo.myrelib'
+    compileSdk 36
+    defaultConfig { minSdk 24 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions { jvmTarget = '1.8' }
+    testOptions { unitTests.returnDefaultValues = true }
+}
+
+repositories {
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots' }
+    maven { url 'https://repo.dairy.foundation/releases/' }
+}
+
+dependencies {
+    api "org.firstinspires.ftc:RobotCore:${ftcSdkVersion}"
+    api "org.firstinspires.ftc:Hardware:${ftcSdkVersion}"
+    implementation "org.firstinspires.ftc:FtcCommon:${ftcSdkVersion}"
+    api "com.pedropathing:revhub:${pedroVersion}"
+    testImplementation 'junit:junit:4.13.2'
+}

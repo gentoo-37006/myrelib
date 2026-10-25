@@ -1,0 +1,21 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10'
+        classpath "com.google.devtools.ksp:symbol-processing-gradle-plugin:${kspVersion}"
+    }
+}
+
+plugins {
+    id 'com.android.library' version '8.13.2' apply false
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
+}
