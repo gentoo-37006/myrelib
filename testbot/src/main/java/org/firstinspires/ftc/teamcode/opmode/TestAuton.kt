@@ -13,7 +13,7 @@ abstract class TestAuton(protected val alliance: Alliance) : OpMode() {
     protected abstract fun buildSequence(): AutonSequence
 
     override fun init() {
-        Robot.initFull(alliance, hardwareMap, javaClass.simpleName)
+        Robot.init(alliance, hardwareMap, javaClass.simpleName)
         sequence = buildSequence()
         Robot.motion.setPose(sequence.startPose)
     }

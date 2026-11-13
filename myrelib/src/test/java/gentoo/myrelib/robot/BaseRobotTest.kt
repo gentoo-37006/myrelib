@@ -89,13 +89,13 @@ internal object LifecycleRobot : BaseRobot<LifecycleInstance>() {
         instance: LifecycleInstance? = null,
         alliance: Alliance? = null,
     ) {
-        initFull(alliance) { capturedAlliance ->
+        init(alliance) { capturedAlliance ->
             instance ?: LifecycleInstance(alliance = capturedAlliance)
         }
     }
 
     fun failFullInitialization(alliance: Alliance) {
-        initFull(alliance) { throw IllegalStateException("Runtime construction failed") }
+        init(alliance) { throw IllegalStateException("Runtime construction failed") }
     }
 
     fun initializeEmptyRobot() {

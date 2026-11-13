@@ -4,31 +4,25 @@ import com.pedropathing.follower.Follower
 import com.qualcomm.robotcore.eventloop.opmode.OpMode
 import com.qualcomm.robotcore.hardware.HardwareMap
 import com.qualcomm.robotcore.util.RobotLog
-import gentoo.myrelib.action.ActionInstance
-import gentoo.myrelib.action.ActionType
-import gentoo.myrelib.component.ActionController
-import gentoo.myrelib.component.Component
-import gentoo.myrelib.component.ComponentRegistry
-import gentoo.myrelib.component.HardwareAccess
-import gentoo.myrelib.component.MotionController
-import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.field.FieldPoseBridge
-import gentoo.myrelib.field.RecordingFiles
-import gentoo.myrelib.math.Pose
-import gentoo.myrelib.recording.MatchRecorder
-import gentoo.myrelib.recording.RecordingConfig
+import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.util.Alliance
-import gentoo.myrelib.util.PoseRepository
+import gentoo.myrelib3.action.ActionInstance
+import gentoo.myrelib3.action.ActionType
+import gentoo.myrelib3.component.ActionController
+import gentoo.myrelib3.component.Component
+import gentoo.myrelib3.component.ComponentRegistry
+import gentoo.myrelib3.component.MotionController
+import gentoo.myrelib3.config.ComponentConfig
+import gentoo.myrelib3.field.FieldPoseBridge
+import gentoo.myrelib3.field.RecordingFiles
+import gentoo.myrelib3.math.Pose
+import gentoo.myrelib3.recording.MatchRecorder
+import gentoo.myrelib3.recording.RecordingConfig
+import gentoo.myrelib3.util.PoseRepository
 import org.jetbrains.annotations.TestOnly
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 import com.pedropathing.paths.Path as PedroPath
-
-/** The two supported ways to build robot state for an opmode. */
-enum class InitType {
-    FULL,
-    EMPTY
-}
 
 typealias FollowerFactory = (HardwareMap) -> Follower
 
@@ -117,11 +111,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
     private var _instance: T? = null
     private var recorder: MatchRecorder? = null
 
-    var initType: InitType? = null
-        private set
-
     val isInited: Boolean get() = _instance != null
-    val isFullyInited: Boolean get() = initType == InitType.FULL
 
     protected val instance: T
         get() = _instance ?: throw IllegalStateException("Robot has not been initialized")
@@ -157,7 +147,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
      * This will return null if the follower is disabled or uninitialized.
      */
     val strictPose: Pose?
-        get() = if(isFullyInited) motion.pose else null
+        get() = motion.pose
 
     abstract val config: ComponentConfig
     abstract val followerFactory: FollowerFactory
@@ -170,7 +160,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
         recorder?.sample(phase, force)
     }
 
-    internal fun recordPath(path: gentoo.myrelib.field.FieldPath) {
+    internal fun recordPath(path: gentoo.myrelib3.field.FieldPath) {
         recorder?.recordPath(path)
     }
 
@@ -208,7 +198,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
         singleton = this
     }
 
-    fun initFull(
+    fun init(
         alliance: Alliance?,
         hardwareMap: HardwareMap,
         opModeName: String = "Robot"
@@ -216,7 +206,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
         PoseRepository.attach(hardwareMap.appContext)
         RecordingFiles.attach(hardwareMap.appContext.filesDir)
         val hardware = HardwareAccess.from(hardwareMap)
-        initFull(alliance, opModeName) {
+        init(alliance, opModeName) {
             robotFactory(
                 Context(
                     hardware,
@@ -230,7 +220,7 @@ abstract class BaseRobot<T : BaseRobotInstance> {
 
     /** JVM-test and specialized initialization seam that does not require FTC hardware. */
     @TestOnly
-    protected fun initFull(
+    protected fun init(
         alliance: Alliance?,
         opModeName: String = "Robot",
         factory: (Alliance?) -> T
@@ -239,7 +229,6 @@ abstract class BaseRobot<T : BaseRobotInstance> {
         FieldPoseBridge.begin(opModeName, WIDTH, LENGTH)
         try {
             _instance = factory(alliance)
-            initType = InitType.FULL
             beginRecording(opModeName)
         }
         catch(failure: Throwable) {
@@ -260,7 +249,6 @@ abstract class BaseRobot<T : BaseRobotInstance> {
                     null,
                 )
             )
-            initType = InitType.EMPTY
         }
         catch(failure: Throwable) {
             FieldPoseBridge.stop()
@@ -279,7 +267,6 @@ abstract class BaseRobot<T : BaseRobotInstance> {
         }
         finally {
             _instance = null
-            initType = null
         }
     }
 }

@@ -43,7 +43,7 @@ object Robot : BaseRobot<RobotInstance>() {
         hardware: HardwareAccess = HardwareAccess.empty(),
         componentConfig: ComponentConfig = config
     ) {
-        initFull(alliance, "Test TeamCode") { selectedAlliance ->
+        init(alliance, "Test TeamCode") { selectedAlliance ->
             robotFactory(Context(hardware, componentConfig, followerFactory, selectedAlliance))
         }
     }

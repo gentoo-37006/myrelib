@@ -11,7 +11,7 @@ class TestTeleOp : OpMode() {
     private var inputs: FtcInputBindings? = null
 
     override fun init() {
-        Robot.initFull(null, hardwareMap, "Test TeamCode")
+        Robot.init(null, hardwareMap, "Test TeamCode")
         inputs = FtcInputBindings(gamepad1, gamepad2).apply {
             driver.a.onChange(ClawActions.HOLD_OPEN)
         }
