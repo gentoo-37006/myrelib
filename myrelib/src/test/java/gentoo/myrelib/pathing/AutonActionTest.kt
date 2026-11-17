@@ -10,7 +10,6 @@ import gentoo.myrelib.action.Sequential
 import gentoo.myrelib.action.actionType
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.math.assertPoseEquals
-import gentoo.myrelib.robot.LifecycleInstance
 import gentoo.myrelib.robot.LifecycleRobot
 import gentoo.myrelib.util.Alliance
 import org.junit.After
@@ -25,7 +24,6 @@ import org.junit.Test
 class AutonActionTest {
     private val robot = LifecycleRobot
     private fun AutonSequence.tick() { robot.components.tick() }
-    private lateinit var instance: LifecycleInstance
     private val actionEvents = mutableListOf<String>()
 
     private val INTAKE by actionType { recordingAction("INTAKE") }
@@ -44,8 +42,7 @@ class AutonActionTest {
     @Before
     fun initializeRobot() {
         actionEvents.clear()
-        instance = LifecycleInstance()
-        robot.initializeFullRobot(instance)
+        robot.initializeRobot()
     }
 
     @After

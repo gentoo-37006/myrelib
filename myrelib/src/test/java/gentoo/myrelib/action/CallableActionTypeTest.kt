@@ -16,7 +16,7 @@ private class PowerAction(val power: Double) : Action() {
 
 class CallableActionTypeTest {
     private val robot = LifecycleRobot
-    @Before fun initialize() { robot.reset(); robot.initializeFullRobot() }
+    @Before fun initialize() { robot.reset(); robot.initializeRobot() }
     @After fun cleanup() { robot.reset() }
 
     @Test fun `binding parameters is lazy and keeps one identity across arguments`() {
@@ -120,7 +120,7 @@ class CallableActionTypeTest {
         assertEquals(1, built); assertFalse(shoot.isRunning())
         shoot(0.8).submit(); robot.removeAllActions()
         assertEquals(2, built); assertFalse(shoot.isRunning())
-        robot.initEmpty(); shoot(0.8).submit()
+        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll()); shoot(0.8).submit()
         assertEquals(2, built)
     }
 

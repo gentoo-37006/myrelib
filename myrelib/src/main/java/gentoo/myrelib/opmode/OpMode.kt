@@ -2,6 +2,7 @@ package gentoo.myrelib.opmode
 
 import com.qualcomm.hardware.lynx.LynxModule
 import com.qualcomm.robotcore.hardware.HardwareMap
+import gentoo.myrelib.util.cleanupAll
 import com.qualcomm.robotcore.eventloop.opmode.OpMode as FTCOpMode
 
 abstract class OpMode : FTCOpMode() {
@@ -53,58 +54,59 @@ abstract class OpMode : FTCOpMode() {
     internal open fun playStopPost() {
     }
 
+    /** Framework resource cleanup, attempted even when user hooks fail. */
+    internal open fun cleanup() {}
+
+    private inline fun lifecycle(block: () -> Unit) {
+        try { block() }
+        catch(failure: Throwable) {
+            try { cleanup() }
+            catch(cleanupFailure: Throwable) {
+                if(failure !== cleanupFailure) failure.addSuppressed(cleanupFailure)
+            }
+            throw failure
+        }
+    }
+
     enum class Phase {
         INIT,
         PLAY
     }
 
-    final override fun init() {
+    final override fun init() = lifecycle {
+        phase = Phase.INIT
         hubs = Hubs(hardwareMap)
         hubs.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)
+        hubs.clearBulkCache()
         initStartPre()
         initStart()
         initStartPost()
     }
 
-    final override fun init_loop() {
+    final override fun init_loop() = lifecycle {
         hubs.clearBulkCache()
         initTickPre()
         initTick()
         initTickPost()
     }
 
-    final override fun start() {
+    final override fun start() = lifecycle {
+        hubs.clearBulkCache()
         phase = Phase.PLAY
         playStartPre()
         playStart()
         playStartPost()
     }
 
-    final override fun loop() {
+    final override fun loop() = lifecycle {
         hubs.clearBulkCache()
         playTickPre()
         playTick()
         playTickPost()
     }
 
-    @Suppress("KotlinConstantConditions")
     final override fun stop() {
-        var stopFailure: Throwable? = null
-        // attempt all hooks in order, even if one throws
-        for(hook in listOf(::playStopPre, ::playStop, ::playStopPost)) {
-            try {
-                hook()
-            }
-            catch(failure: Throwable) {
-                if(stopFailure == null) {
-                    stopFailure = failure
-                }
-                else if(stopFailure !== failure) {
-                    stopFailure.addSuppressed(failure)
-                }
-            }
-        }
-        stopFailure?.let { throw it }
+        cleanupAll(::playStopPre, ::playStop, ::playStopPost, ::cleanup)
     }
 
     private class Hubs(hardwareMap: HardwareMap) {

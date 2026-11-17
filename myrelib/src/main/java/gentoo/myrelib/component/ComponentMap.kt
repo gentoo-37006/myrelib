@@ -1,7 +1,5 @@
 package gentoo.myrelib.component
 
-import gentoo.myrelib3.component.ActionController
-
 /** A map of components that guarantees the ActionController component will always iterate first. */
 class ComponentMap {
     private var actionController: Pair<String, ActionController>? = null
@@ -30,6 +28,9 @@ class ComponentMap {
         }
         return components[name]
     }
+
+    internal val entries: List<Pair<String, Component>>
+        get() = listOfNotNull(actionController) + components.map { it.key to it.value }
 
     val values: Collection<Component>
         get() {

@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode
 import com.qualcomm.robotcore.hardware.HardwareDevice
 import com.qualcomm.robotcore.hardware.HardwareMap
 import com.qualcomm.robotcore.hardware.Servo
-import gentoo.myrelib.component.HardwareAccess
+import gentoo.myrelib.hardware.HardwareAccess
 import org.firstinspires.ftc.teamcode.component.Claw
 import java.lang.reflect.Proxy
 

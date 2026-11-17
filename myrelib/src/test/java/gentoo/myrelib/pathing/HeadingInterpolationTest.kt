@@ -95,8 +95,8 @@ class HeadingInterpolationTest {
 
         assertAngleEquals(-180.0, transformed.startHeading)
         assertAngleEquals(-90.0, transformed.endHeading)
-        assertEquals(0.2, transformed.startT, EPSILON)
-        assertEquals(0.8, transformed.endT, EPSILON)
+        assertEquals(0.2, transformed.start, EPSILON)
+        assertEquals(0.8, transformed.end, EPSILON)
 
         assertAngleEquals(-180.0, transformed.headingAt(0.1))
         assertAngleEquals(-135.0, transformed.headingAt(0.5))

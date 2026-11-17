@@ -34,13 +34,42 @@ hardware scoping, coordinates, persistence, configuration, and file protocols.
 Do not require a test per component or action, or pin changing season behavior.
 Regression tests should fail against the previous implementation.
 
-The framework has no season singleton. A consumer supplies its typed
-`BaseRobot<RobotInstance>` singleton and `RobotFactory<T>` using `Context`.
-`BaseRobotInstance` owns the component registry, action controller, and concrete
-motion controller. Components resolve devices only through the protected
-component-scoped `HardwareAccess`; disabled components never query hardware and
-must remain safe to call. All components, including disabled ones, are released
-at reset. Attempt every cleanup and preserve later failures as suppressed.
+The framework has no season singleton. A consumer supplies one `BaseRobot`
+singleton that owns its components, action controller, and concrete motion
+controller directly; there is no separate robot-instance type or robot factory.
+Declare `val turret by component(::Turret)` on that singleton. Component delegates
+register factories at declaration and construct them in declaration order only
+during the first opmode INIT. Early property reads fail without constructing a
+component; property references used for configuration do not read components.
+Successfully created components are retained if a later factory fails, and only
+unfinished factories are retried. Use no-argument `Component()` /
+`StatefulComponent()` constructors. Ordinary fields and FSM state survive normal
+opmode transitions without persistence annotations. A fresh `RobotSession` owns
+each run's alliance and INIT/PLAY state; reset ends execution without discarding
+the robot or components.
+
+Components resolve devices only through protected component-scoped
+`HardwareAccess` in `onAttach`, which configures hardware and refreshes current
+measurements at every enabled INIT without implicitly zeroing encoders.
+`onInitialize` runs once after the first successful enabled attachment, allowing
+physical setup to wait for the first opmode; disabled sessions defer it.
+`onStart` runs at PLAY. `onDetach` releases per-run handles/tasks while retaining
+calibration and logical state. Recreate hardware wrappers during attachment;
+managed lookups use SDK interfaces, and direct handles expire at detach and only
+work on the attachment thread. Low-level raw HardwareMap integrations must drop
+all references at detach. Disabled components never query hardware and must
+remain safe to call. Reset cancels running/queued actions and detaches all
+attached components, including disabled ones. Attempt every cleanup and preserve
+later failures as suppressed. Partial attachment failure rolls back acquired
+resources and allows retry with the same component objects.
+
+`RobotOpMode` owns per-opmode input bindings, ticks components once per loop,
+clears bulk caches before attachment/loops, and guarantees cleanup after user
+hook failures. Consumers override the public lifecycle hooks, not FTC methods.
+Bare FTC opmodes must call init/start/reset and manage inputs/caches themselves.
+There is no background hardware polling between opmodes; movement while idle is
+observed when attachment refreshes sensors. Persistence lasts for this robot
+singleton, not across an app restart, power loss, or code reload.
 
 `StatefulComponent` owns a protected enum FSM; keep transitions behind component
 methods. Its declarative `changeState` selects the first matching rule based on
@@ -57,7 +86,14 @@ Action types are stable identities, each accepted submission creates a fresh
 action, and requirements/conflict policies belong to instances. Group actions
 must preserve cancellation, reentrant callbacks, and all-child cleanup.
 
-Full initialization starts match recording; empty initialization does not.
+Initialization has one lifecycle path. Disabling every component is ordinary
+initialization with `ComponentConfig.disableAll()`, not a separate mode.
+Opmodes opt into recording through `BaseRobot.startRecording()` and explicitly
+sample with `recordState(force = ...)`, which derives its phase from the active
+robot session state (`INIT`/`PLAY`) rather than caller-supplied strings. Neither
+initialization nor `RobotOpMode` starts or samples recordings automatically. `configureRecording` on the robot registers
+cached state suppliers. Repeated starts in a session are harmless, and reset
+always closes that session's recording without carrying it into the next run.
 State suppliers read cached values on the opmode thread; background writers
 receive detached bounded values and never block robot ticks. `motionPath` is a
 reserved framework state. Path events preserve bounded geometry between samples.

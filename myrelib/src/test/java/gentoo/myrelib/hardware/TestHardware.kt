@@ -1,7 +1,7 @@
 package gentoo.myrelib.hardware
 
 import com.qualcomm.robotcore.hardware.HardwareMap
-import gentoo.myrelib.component.HardwareAccess
+import gentoo.myrelib.hardware.HardwareAccess
 
 /**
  * A root [HardwareAccess] whose FTC map contains no devices.

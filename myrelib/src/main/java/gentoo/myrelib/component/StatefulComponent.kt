@@ -12,6 +12,7 @@ abstract class StatefulComponent<State : Enum<State>> : Component {
             fsm.state = value
         }
 
+    constructor() : super()
     constructor(disabled: Boolean) : super(disabled)
     constructor(hardware: HardwareAccess, disabled: Boolean) : super(hardware, disabled)
 

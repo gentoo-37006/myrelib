@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous
 import com.qualcomm.robotcore.hardware.HardwareMap
-import gentoo.myrelib.component.HardwareAccess
+import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.config.ComponentConfig
 import gentoo.myrelib.input.InputBindings
 import gentoo.myrelib.math.Pose
@@ -14,7 +14,6 @@ import org.firstinspires.ftc.teamcode.opmode.generated.Red_SmokeAuton
 import org.firstinspires.ftc.teamcode.opmode.routines.SmokeAuton
 import org.firstinspires.ftc.teamcode.opmode.routines.smokeSequence
 import org.firstinspires.ftc.teamcode.robot.Robot
-import org.firstinspires.ftc.teamcode.robot.RobotInstance
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -22,7 +21,12 @@ import org.junit.Test
 
 /** Uses only the public library API, compiled from a separate consuming module. */
 class ConsumerContractTest {
-    @Before fun initialize() = Robot.reset()
+    @Before fun initialize() {
+        Robot.reset()
+        Robot.initForTest()
+        Robot.claw.close()
+        Robot.reset()
+    }
 
     @After fun cleanup() = Robot.reset()
 
@@ -69,7 +73,7 @@ class ConsumerContractTest {
     @Test
     fun `disabled consumer component tolerates absent hardware and scheduled calls`() {
         val onlyActions = object : ComponentConfig(disabledByDefault = true) {
-            override fun componentBindings() = bind(RobotInstance::actions to false)
+            override fun componentBindings() = bind(Robot::actions to false)
         }
         // An accidental lookup of testClaw on this available scope would throw.
         Robot.initForTest(
@@ -94,7 +98,7 @@ class ConsumerContractTest {
     }
 
     @Test
-    fun `reset cancels consumer actions releases hardware and builds fresh components`() {
+    fun `reset cancels consumer actions and reattaches the same components`() {
         val hardware = FakeHardware()
         Robot.initForTest(hardware = hardware.access)
         val oldClaw = Robot.claw
@@ -108,19 +112,39 @@ class ConsumerContractTest {
         assertFalse(Robot.isInited)
 
         Robot.initForTest()
-        assertNotSame(oldClaw, Robot.claw)
+        assertSame(oldClaw, Robot.claw)
         assertTrue(Robot.runningActions.isEmpty())
         assertEquals(Claw.State.CLOSED, Robot.claw.state)
     }
 
     @Test
-    fun `empty consumer initialization disables components and rejects action submissions`() {
-        Robot.initEmpty("Empty TeamCode test")
+    fun `ordinary component state persists across opmodes without a persistence field`() {
+        val autonHardware = FakeHardware()
+        Robot.initForTest(hardware = autonHardware.access)
+        val claw = Robot.claw
+        claw.open()
+        Robot.components.tick()
+        Robot.reset()
+        assertEquals(Claw.State.OPEN, claw.state)
+        assertTrue(claw.disabled)
+
+        val teleopHardware = FakeHardware()
+        Robot.initForTest(hardware = teleopHardware.access)
+        assertSame(claw, Robot.claw)
+        assertEquals(Claw.State.OPEN, Robot.claw.state)
+        assertTrue(teleopHardware.positions.isEmpty())
+        Robot.components.tick()
+        assertEquals(listOf(Claw.OPEN_POSITION), teleopHardware.positions)
+    }
+
+    @Test
+    fun `disabled consumer configuration uses normal initialization and rejects action submissions`() {
+        Robot.initForTest(componentConfig = ComponentConfig.disableAll())
         ClawActions.HOLD_OPEN.submit()
         Robot.claw.open()
         Robot.components.tick()
 
-        assertFalse(Robot.isFullyInited)
+        assertTrue(Robot.isInited)
         assertTrue(Robot.motion.disabled)
         assertTrue(Robot.claw.disabled)
         assertEquals(Claw.State.CLOSED, Robot.claw.state)

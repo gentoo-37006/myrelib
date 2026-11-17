@@ -1,395 +1,472 @@
 package gentoo.myrelib.robot
 
-import com.pedropathing.follower.Follower
+import com.google.gson.JsonParser
+import com.qualcomm.robotcore.hardware.DcMotorEx
 import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.action.Action
 import gentoo.myrelib.action.actionType
 import gentoo.myrelib.component.Component
 import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.component.HardwareAccess
-import gentoo.myrelib.math.Pose
-import gentoo.myrelib.pathing.Linear
-import gentoo.myrelib.pathing.Path
-import gentoo.myrelib.util.Alliance
 import gentoo.myrelib.field.FieldPoseBridge
+import gentoo.myrelib.field.RecordingFiles
+import gentoo.myrelib.hardware.HardwareAccess
+import gentoo.myrelib.recording.MatchRecorder
+import gentoo.myrelib.util.Alliance
+import java.lang.reflect.Proxy
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
-import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 
-internal class LifecycleComponent(
-    val suppliedHardware: HardwareAccess,
-    disabled: Boolean = false
-) : Component(suppliedHardware, disabled) {
+internal class LifecycleComponent : Component() {
     var ticks = 0
+    var attachments = 0
+    var initializations = 0
+    var starts = 0
     var releases = 0
+    var calibrationOffset = 0
+    var measuredPosition = 0
+    var attachFailure: Throwable? = null
     var releaseFailure: Throwable? = null
+    private var motor: DcMotorEx? = null
 
-    override fun tick() {
-        ticks++
+    override fun onAttach() {
+        attachments++
+        motor = hardware.get("turret")
+        measuredPosition = (motor?.currentPosition ?: 0) - calibrationOffset
+        attachFailure?.let { throw it }
     }
-
-    override fun release() {
+    override fun onInitialize() { initializations++ }
+    override fun onStart() { starts++ }
+    override fun tick() { ticks++ }
+    override fun onDetach() {
+        motor = null
         releases++
         releaseFailure?.let { throw it }
     }
 }
 
-private class LifecycleComponentConfig(
-    private val disabledComponents: Set<String>
-) : ComponentConfig() {
-    override fun componentBindings() = disabledComponents.associateWith { true }
-}
-
-private val lifecycleFollowerFactory: (HardwareMap) -> Follower = {
-    error("a hardware-free test instance must not construct a follower")
-}
-
-internal open class LifecycleInstance(
-    hardwareAccess: HardwareAccess = HardwareAccess.empty(),
-    config: ComponentConfig = ComponentConfig.enableAll(),
-    alliance: Alliance? = null,
-    followerFactory: FollowerFactory = lifecycleFollowerFactory,
-) : BaseRobotInstance(
-    Context(
-        hardware = hardwareAccess,
-        config = config,
-        followerFactory = followerFactory,
-        alliance = alliance,
-    ),
-) {
-    val component by component { hardware, disabled ->
-        LifecycleComponent(hardware, disabled)
-    }
-}
-
-private class ConfiguredLifecycleInstance(
-    hardwareAccess: HardwareAccess,
-    config: ComponentConfig,
-) : BaseRobotInstance(Context(hardwareAccess, config, lifecycleFollowerFactory)) {
-    val component by component { hardware, disabled ->
-        LifecycleComponent(hardware, disabled)
-    }
-}
-
-internal object LifecycleRobot : BaseRobot<LifecycleInstance>() {
+internal object LifecycleRobot : BaseRobot() {
     override val LENGTH = 16.0
     override val WIDTH = 16.0
-    override val config: ComponentConfig = ComponentConfig.enableAll()
-    override val followerFactory = lifecycleFollowerFactory
-    override val robotFactory: RobotFactory<LifecycleInstance> =
-        { context -> LifecycleInstance(context.hardware, context.config, context.alliance) }
+    override val config = ComponentConfig.enableAll()
+    override val followerFactory: FollowerFactory = { error("Hardwareless test must not construct a follower") }
+    var constructions = 0
+        private set
+    val component by component {
+        constructions++
+        LifecycleComponent()
+    }
+    val last by component(::LifecycleComponent)
+    var recordingSetups = 0
+    var recordingValue = 0
+    var lastRecorder: MatchRecorder? = null
+    override fun configureRecording(recorder: MatchRecorder) {
+        recordingSetups++
+        lastRecorder = recorder
+        recorder.addState("cached") { recordingValue }
+    }
+    val constructionsAtDeclaration = constructions
+    val prematureReadFailure = runCatching { component }.exceptionOrNull()
 
-    fun initializeFullRobot(
-        instance: LifecycleInstance? = null,
+    fun initializeRobot(
         alliance: Alliance? = null,
-    ) {
-        init(alliance) { capturedAlliance ->
-            instance ?: LifecycleInstance(alliance = capturedAlliance)
-        }
-    }
-
-    fun failFullInitialization(alliance: Alliance) {
-        init(alliance) { throw IllegalStateException("Runtime construction failed") }
-    }
-
-    fun initializeEmptyRobot() {
-        initEmpty()
-    }
-
-    val seasonInstance: LifecycleInstance get() = instance
+        hardware: HardwareAccess = HardwareAccess.empty(),
+        config: ComponentConfig = this.config,
+        followerFactory: FollowerFactory = this.followerFactory,
+        opModeName: String = "Lifecycle test",
+    ) = init(alliance, hardware, config, followerFactory, opModeName)
 }
 
-
-/**
- * Exists only to prove the singleton guard still rejects a genuine duplicate.
- * Its initialization is expected to fail, so nothing else may touch it.
- */
-internal object DuplicateRobot : BaseRobot<LifecycleInstance>() {
+internal object DuplicateRobot : BaseRobot() {
     override val LENGTH = 16.0
     override val WIDTH = 16.0
-    override val config: ComponentConfig = ComponentConfig.enableAll()
-    override val followerFactory = lifecycleFollowerFactory
-    override val robotFactory: RobotFactory<LifecycleInstance> =
-        { context -> LifecycleInstance(context.hardware, context.config, context.alliance) }
+    override val config = ComponentConfig.enableAll()
+    override val followerFactory: FollowerFactory = { error("unused") }
 }
 
 class BaseRobotTest {
-    // BaseRobot.INSTANCE is process-wide because FTC has one season Robot singleton.
-    // Keep exactly one robot fixture per test and clean up both sides of the test.
+    @get:Rule val temporary = TemporaryFolder()
     private val robot = LifecycleRobot
-
-    @Before
-    fun clearRobotState() {
-        robot.reset()
+    private val noMotion = object : ComponentConfig() {
+        override fun componentBindings() = bind(BaseRobot::motion to true)
     }
 
-    @After
-    fun resetRobotState() {
+    @Before fun clearRobotState() { robot.reset() }
+    @After fun resetRobotState() {
+        if(robot.constructions > 0) {
+            robot.component.attachFailure = null
+            robot.component.releaseFailure = null
+            robot.last.releaseFailure = null
+            robot.component.calibrationOffset = 0
+        }
         robot.reset()
+        robot.lastRecorder?.awaitClosed()
+        robot.lastRecorder = null
     }
 
-    @Test
-    fun `half dimensions are derived after subclass initialization`() {
+    @Test fun `half dimensions are derived after subclass initialization`() {
         assertEquals(8.0, robot.HALF_LENGTH, 0.0)
         assertEquals(8.0, robot.HALF_WIDTH, 0.0)
     }
 
-    @Test
-    fun `framework lifecycle owns viewer sessions including failed initialization`() {
-        robot.initEmpty("Debug Viewer")
-        val initial = FieldPoseBridge.snapshot()
-        assertTrue(initial.active)
-        assertEquals("Debug Viewer", initial.opMode)
-        assertEquals(robot.WIDTH, initial.robot!!.width, 0.0)
-        assertNull(initial.pose)
+    @Test fun `single robot declarations defer component construction and reads until INIT`() {
+        assertEquals(0, robot.constructionsAtDeclaration)
+        assertTrue(robot.prematureReadFailure is IllegalStateException)
+        assertTrue(robot.prematureReadFailure!!.message!!.contains("first opmode INIT"))
+        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        val component = robot.component
+        val registryComponent = robot.components["component"]
+        assertSame(component, registryComponent)
+        assertEquals(1, robot.constructions)
+        assertTrue(component.disabled)
         robot.reset()
-        assertFalse(FieldPoseBridge.snapshot().active)
-
-        assertThrows(IllegalStateException::class.java) {
-            robot.failFullInitialization(Alliance.BLUE)
-        }
-        assertFalse(FieldPoseBridge.snapshot().active)
+        robot.initializeRobot()
+        assertSame(component, robot.component)
+        assertEquals(1, robot.constructions)
     }
 
+    @Test fun `first disabled attachment defers one-time setup until the first enabled INIT`() {
+        val component = LifecycleComponent()
+        val registry = gentoo.myrelib.component.ComponentRegistry()
+        registry.register("component", component)
+        registry.attach(HardwareAccess.empty(), ComponentConfig.disableAll().instance())
+        assertEquals(0, component.initializations)
+        registry.detach()
+        repeat(2) {
+            registry.attach(HardwareAccess.empty(), ComponentConfig.enableAll().instance())
+            registry.detach()
+        }
+        assertEquals(2, component.attachments)
+        assertEquals(1, component.initializations)
+        assertEquals(3, component.releases)
+    }
 
-    // The guard tolerates a sloth hot load replacing the season Robot from a new
-    // class loader, so this locks in that it still rejects a real duplicate, which
-    // in a JVM test shares this test's loader. The cross-loader replacement path
-    // only exists on the robot and has no JVM seam.
-    @Test
-    fun `a second robot object in the same class loader is rejected`() {
-        assertSame(LifecycleRobot, BaseRobot.INSTANCE)
+    @Test fun `failed one-time setup is cleaned up and retried only until it succeeds`() {
+        var attempts = 0
+        var detaches = 0
+        val failure = IllegalStateException("not ready")
+        val component = object : Component() {
+            override fun onInitialize() {
+                attempts++
+                if(attempts == 1) throw failure
+            }
+            override fun onDetach() { detaches++ }
+            override fun tick() = Unit
+        }
+        val registry = gentoo.myrelib.component.ComponentRegistry()
+        registry.register("mechanism", component)
+        assertSame(failure, assertThrows(IllegalStateException::class.java) {
+            registry.attach(HardwareAccess.empty(), ComponentConfig.enableAll().instance())
+        })
+        registry.release()
+        repeat(2) {
+            registry.attach(HardwareAccess.empty(), ComponentConfig.enableAll().instance())
+            registry.release()
+        }
+        registry.release()
+        assertEquals(2, attempts)
+        assertEquals(3, detaches)
+        assertTrue(component.disabled)
+    }
 
+    @Test fun `a second robot object in the same class loader is rejected`() {
+        assertSame(robot, BaseRobot.INSTANCE)
         val error = assertThrows(ExceptionInInitializerError::class.java) { DuplicateRobot.isInited }
         assertTrue(error.cause is IllegalStateException)
-
-        // the rejected robot must not have displaced the real one
-        assertSame(LifecycleRobot, BaseRobot.INSTANCE)
+        assertSame(robot, BaseRobot.INSTANCE)
     }
-    @Test
-    fun `uninitialized access fails loudly`() {
+
+    @Test fun `idle has no session or alliance`() {
         assertFalse(robot.isInited)
-        assertNull(robot.initType)
-        assertThrows(IllegalStateException::class.java) { robot.components }
-        assertThrows(IllegalStateException::class.java) { robot.seasonInstance }
-        assertThrows(IllegalStateException::class.java) { robot.alliance }
+        assertEquals(State.IDLE, robot.state)
+        assertThrows(IllegalStateException::class.java) { robot.session }
         assertThrows(IllegalStateException::class.java) { Alliance.pick("blue", "red") }
     }
 
-    @Test
-    fun `empty initialization builds a disabled season instance`() {
-        robot.initializeEmptyRobot()
-        robot.components.tick()
-
-        assertTrue(robot.isInited)
-        assertFalse(robot.isFullyInited)
-        assertEquals(InitType.EMPTY, robot.initType)
-        assertTrue(robot.runningActions.isEmpty())
-        assertTrue(robot.components[BaseRobotInstance::actions.name].disabled)
-        assertTrue(robot.components[LifecycleInstance::component.name].disabled)
+    @Test fun `normal initialization with all components disabled keeps the viewer hardwareless`() {
+        robot.initializeRobot(config = ComponentConfig.disableAll(), opModeName = "Debug Viewer")
+        val snapshot = FieldPoseBridge.snapshot()
+        assertTrue(snapshot.active)
+        assertEquals("Debug Viewer", snapshot.opMode)
+        assertEquals(robot.WIDTH, snapshot.robot!!.width, 0.0)
+        assertNull(snapshot.pose)
+        assertTrue(robot.component.disabled)
+        assertTrue(robot.actions.disabled)
         assertNull(robot.alliance)
-        assertNull(Alliance.pick("blue", "red"))
-        assertTrue(robot.seasonInstance.component.disabled)
+        robot.reset()
+        assertFalse(FieldPoseBridge.snapshot().active)
     }
 
-    @Test
-    fun `full initialization exposes and ticks the season instance`() {
-        val instance = LifecycleInstance()
-
-        robot.initializeFullRobot(instance)
-        robot.components.tick()
-
-        assertTrue(robot.isFullyInited)
-        assertEquals(InitType.FULL, robot.initType)
-        assertEquals(instance, robot.seasonInstance)
-        assertEquals(1, instance.component.ticks)
+    @Test fun `opmodes reuse component identity and calibration but refresh measurements`() {
+        var encoder = 165
+        val motor = Proxy.newProxyInstance(DcMotorEx::class.java.classLoader, arrayOf(DcMotorEx::class.java)) { _, method, _ ->
+            when(method.name) {
+                "getCurrentPosition" -> encoder
+                else -> error("Attachment must only read position, got ${method.name}")
+            }
+        }
+        val hardware = HardwareAccess.from(object : HardwareMap(null, null) {
+            override fun <T : Any?> get(classOrInterface: Class<out T>, deviceName: String): T = classOrInterface.cast(motor)!!
+        })
+        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        val original = robot.component
+        original.calibrationOffset = 100
+        val initializations = original.initializations
+        robot.initializeRobot(Alliance.BLUE, hardware, noMotion)
+        val autonSession = robot.session
+        assertSame(original, robot.component)
+        assertEquals(65, original.measuredPosition)
+        val afterFirstInit = original.initializations
+        assertTrue(afterFirstInit == initializations || afterFirstInit == initializations + 1)
+        robot.reset()
+        encoder = 190 // Physical movement while idle; no component tick occurs.
+        robot.initializeRobot(Alliance.RED, hardware, noMotion)
+        assertSame(original, robot.component)
+        assertNotSame(autonSession, robot.session)
+        assertEquals(State.IDLE, autonSession.state)
+        assertEquals(90, original.measuredPosition)
+        assertEquals(100, original.calibrationOffset)
+        assertEquals(afterFirstInit, original.initializations)
+        assertEquals(1, robot.constructions)
     }
 
-    @Test
-    fun `instance configuration is applied while a registered component is constructed`() {
-        val hardwareAccess = HardwareAccess.empty()
-        val instance = LifecycleInstance(
-            hardwareAccess = hardwareAccess,
-            config = LifecycleComponentConfig(setOf(LifecycleInstance::component.name))
-        )
-
-        robot.initializeFullRobot(instance)
-        robot.components.tick()
-
-        assertTrue(instance.component.disabled)
-        assertSame(hardwareAccess, instance.component.suppliedHardware)
-        assertEquals(0, instance.component.ticks)
-        assertSame(instance.component, robot.components[LifecycleInstance::component.name])
-    }
-
-    @Test
-    fun `component config constructor applies an immutable snapshot`() {
+    @Test fun `each session snapshots configuration before attachment`() {
         var disabled = true
         val config = object : ComponentConfig() {
-            override fun componentBindings() = mapOf(
-                ConfiguredLifecycleInstance::component.name to disabled
-            )
+            override fun componentBindings() = bind(LifecycleRobot::component to disabled)
         }
-        val instance = ConfiguredLifecycleInstance(HardwareAccess.empty(), config)
-
+        robot.initializeRobot(config = config)
+        val component = robot.component
+        val ticks = component.ticks
         disabled = false
-        instance.components.tick()
-
-        assertTrue(instance.component.disabled)
-        assertEquals(0, instance.component.ticks)
+        robot.components.tick()
+        assertTrue(component.disabled)
+        assertEquals(ticks, component.ticks)
+        robot.initializeRobot(config = config)
+        robot.components.tick()
+        assertFalse(component.disabled)
+        assertEquals(ticks + 1, component.ticks)
     }
 
-    @Test
-    fun `a plain base robot always has a motion controller`() {
-        robot.initializeFullRobot()
-
-        robot.follow(Path(Linear(Pose(), Pose(1.0, 1.0))).build())
-
-        assertFalse(robot.following)
-    }
-
-    @Test
-    fun `reinitializing releases the previous instance`() {
-        val previous = LifecycleInstance()
-
-        robot.initializeFullRobot(previous)
-        robot.initializeEmptyRobot()
-
-        assertEquals(1, previous.component.releases)
-        assertEquals(InitType.EMPTY, robot.initType)
-    }
-
-    @Test
-    fun `reset releases once and is idempotent`() {
-        val instance = LifecycleInstance()
-        robot.initializeFullRobot(instance)
-
+    @Test fun `start runs once per session and reset disables retained references`() {
+        robot.initializeRobot()
+        val component = robot.component
+        val starts = component.starts
+        val releases = component.releases
+        robot.start()
+        assertEquals(State.PLAY, robot.state)
+        assertEquals(starts + 1, component.starts)
+        assertThrows(IllegalStateException::class.java) { robot.start() }
         robot.reset()
         robot.reset()
-
-        assertEquals(1, instance.component.releases)
-        assertFalse(robot.isInited)
-        assertNull(robot.initType)
+        assertTrue(component.disabled)
+        assertEquals(releases + 1, component.releases)
     }
 
-    @Test
-    fun `reset releases components even when an action stop fails`() {
-        val failure = IllegalStateException("action stop failed")
-        val instance = LifecycleInstance()
-        robot.initializeFullRobot(instance)
-        var stops = 0
-        val failing by actionType {
+    @Test fun `reset cancels running queued and reentrant work before the next session`() {
+        robot.initializeRobot()
+        val resource = Any()
+        var stopped = false
+        var queuedBuilds = 0
+        val queued by actionType {
+            queuedBuilds++
+            object : Action() {}.requiring(resource).withPriority(gentoo.myrelib.action.ActionPriority.LOW)
+                .withBlockedBehavior(gentoo.myrelib.action.BlockedBehavior.QUEUE)
+        }
+        val running by actionType {
             object : Action() {
-                override fun stop(interrupted: Boolean) {
-                    stops++
-                    throw failure
-                }
+                override fun canContinue() = true
+                override fun stop(interrupted: Boolean) { stopped = interrupted; queued.submit() }
+            }.requiring(resource)
+        }
+        running.submit()
+        queued.submit()
+        assertTrue(queued.isStaged())
+        robot.reset()
+        assertTrue(stopped)
+        assertEquals(1, queuedBuilds)
+        robot.initializeRobot()
+        assertTrue(robot.runningActions.isEmpty())
+        assertFalse(queued.isStaged())
+    }
+
+    @Test fun `an action factory ending its session cannot submit its result into the next one`() {
+        robot.initializeRobot()
+        var starts = 0
+        val stale by actionType {
+            robot.reset()
+            robot.initializeRobot()
+            object : Action() {
+                override fun start() { starts++ }
             }
         }
-        failing.submit()
+        stale.submit()
+        assertEquals(0, starts)
+        assertTrue(robot.runningActions.isEmpty())
+    }
 
-        assertSame(failure, assertThrows(IllegalStateException::class.java) { robot.reset() })
+    @Test fun `an override stop callback ending its session cannot restart incoming work`() {
+        robot.initializeRobot()
+        val resource = Any()
+        var starts = 0
+        val old by actionType { object : Action() {
+            override fun stop(interrupted: Boolean) {
+                robot.reset()
+                robot.initializeRobot()
+            }
+        }.requiring(resource) }
+        val incoming by actionType { object : Action() {
+            override fun start() { starts++ }
+        }.requiring(resource).withPriority(gentoo.myrelib.action.ActionPriority.HIGH) }
+        old.submit()
+        incoming.submit()
+        assertEquals(0, starts)
+        assertTrue(robot.runningActions.isEmpty())
+    }
+
+    @Test fun `failed INIT rolls back attached components and permits another session`() {
+        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        val component = robot.component
+        val attachFailure = IllegalStateException("attachment failed")
+        val cleanupFailure = IllegalArgumentException("detach failed")
+        robot.reset()
+        component.attachFailure = attachFailure
+        component.releaseFailure = cleanupFailure
+        val releases = component.releases
+        val failure = assertThrows(IllegalStateException::class.java) { robot.initializeRobot(Alliance.BLUE) }
+        assertSame(attachFailure, failure)
+        assertEquals(listOf(cleanupFailure), failure.suppressed.toList())
+        assertEquals(releases + 1, component.releases)
+        assertFalse(robot.isInited)
+        assertTrue(component.disabled)
+        assertFalse(FieldPoseBridge.snapshot().active)
+        assertThrows(IllegalStateException::class.java) { robot.alliance }
+        component.attachFailure = null
+        component.releaseFailure = null
+        robot.initializeRobot()
+        assertSame(component, robot.component)
+    }
+
+    @Test fun `reset attempts all cleanup and preserves action and component failures`() {
+        robot.initializeRobot()
+        val first = IllegalStateException("action failed")
+        val second = IllegalArgumentException("component failed")
+        val third = AssertionError("last failed")
+        val instance = robot
+        val releases = instance.last.releases
+        instance.component.releaseFailure = second
+        instance.last.releaseFailure = third
+        val failing by actionType { object : Action() {
+            override fun stop(interrupted: Boolean) { throw first }
+        } }
+        failing.submit()
+        val thrown = assertThrows(IllegalStateException::class.java) { robot.reset() }
+        assertSame(first, thrown)
+        assertSame(second, thrown.suppressed.single())
+        assertSame(third, second.suppressed.single())
+        assertEquals(releases + 1, instance.last.releases)
+        assertFalse(robot.isInited)
         assertFalse(FieldPoseBridge.snapshot().active)
         robot.reset()
-
-        assertEquals(1, stops)
-        assertEquals(1, instance.component.releases)
-        assertFalse(robot.isInited)
-        assertNull(robot.initType)
     }
 
-    @Test
-    fun `reset preserves action and component failures after releasing later components`() {
-        val actionFailure = IllegalStateException("action stop failed")
-        val releaseFailure = IllegalArgumentException("component release failed")
-        val instance = LifecycleInstance()
-        instance.component.releaseFailure = releaseFailure
-        val last = instance.components.register("last", LifecycleComponent(HardwareAccess.empty()))
-        robot.initializeFullRobot(instance)
-        val failing by actionType {
-            object : Action() {
-                override fun stop(interrupted: Boolean) { throw actionFailure }
-            }
+    @Test fun `initialization and component loops do not implicitly start recording`() {
+        RecordingFiles.attach(temporary.root)
+        val setups = robot.recordingSetups
+        for(config in listOf(ComponentConfig.enableAll(), ComponentConfig.disableAll())) {
+            robot.initializeRobot(config = config)
+            robot.recordState(force = true)
+            robot.start()
+            robot.components.tick()
+            robot.recordState(force = true)
+            robot.reset()
         }
-        failing.submit()
-
-        val failure = assertThrows(IllegalStateException::class.java) { robot.reset() }
-        robot.reset()
-
-        assertSame(actionFailure, failure)
-        assertEquals(listOf(releaseFailure), failure.suppressed.toList())
-        assertEquals(1, instance.component.releases)
-        assertEquals(1, last.releases)
-        assertFalse(robot.isInited)
-        assertNull(robot.initType)
+        assertEquals(setups, robot.recordingSetups)
+        assertTrue(RecordingFiles.list().isEmpty())
     }
 
-    @Test
-    fun `reset tolerates the same failure in action and component cleanup`() {
-        val sharedFailure = IllegalStateException("shared hardware failure")
-        val instance = LifecycleInstance()
-        instance.component.releaseFailure = sharedFailure
-        robot.initializeFullRobot(instance)
-        val failing by actionType {
-            object : Action() {
-                override fun stop(interrupted: Boolean) { throw sharedFailure }
-            }
+    @Test fun `opmodes explicitly start and sample recording during INIT or PLAY`() {
+        RecordingFiles.attach(temporary.root)
+        val setups = robot.recordingSetups
+        val files = mutableSetOf<java.io.File>()
+        for((index, config) in listOf(ComponentConfig.enableAll(), ComponentConfig.disableAll()).withIndex()) {
+            robot.initializeRobot(Alliance.RED, config = config, opModeName = "Recording $index")
+            if(index == 1) robot.start()
+            robot.recordingValue = index + 10
+            robot.startRecording()
+            robot.startRecording() // A duplicate call must not create another writer or reconfigure states.
+            robot.recordState(force = true)
+            robot.reset()
+            robot.lastRecorder!!.awaitClosed()
+            val file = (RecordingFiles.list().toSet() - files).single()
+            files += file
+            val events = file.readLines().map { JsonParser().parse(it).asJsonObject }
+            val header = events.first()
+            assertEquals("Recording $index", header["opMode"].asString)
+            assertEquals("RED", header["alliance"].asString)
+            assertTrue(header["states"].asJsonArray.any { it.asString == "motionPath" })
+            val sample = events.single { it["type"].asString == "sample" }
+            assertEquals(index + 10, sample["states"].asJsonObject["cached"].asInt)
+            assertEquals(if(index == 0) "INIT" else "PLAY", sample["phase"].asString)
+            assertEquals("end", events.last()["type"].asString)
+
+            // Starting a subsequent session must not resume recording without another explicit call.
+            robot.initializeRobot()
+            robot.recordState(force = true)
+            robot.reset()
+            assertEquals(files, RecordingFiles.list().toSet())
         }
-        failing.submit()
-
-        val failure = assertThrows(IllegalStateException::class.java) { robot.reset() }
-
-        assertSame(sharedFailure, failure)
-        assertEquals(emptyList<Throwable>(), failure.suppressed.toList())
-        assertEquals(1, instance.component.releases)
-        assertFalse(robot.isInited)
+        assertEquals(setups + 2, robot.recordingSetups)
     }
 
-    @Test
-    fun `component release failure still clears the robot instance`() {
-        val releaseFailure = IllegalStateException("component release failed")
-        val instance = LifecycleInstance()
-        instance.component.releaseFailure = releaseFailure
-        val last = instance.components.register("last", LifecycleComponent(HardwareAccess.empty()))
-        robot.initializeFullRobot(instance)
-
-        assertSame(releaseFailure, assertThrows(IllegalStateException::class.java) { robot.reset() })
+    @Test fun `recording phases follow lifecycle transitions within the same session`() {
+        RecordingFiles.attach(temporary.root)
+        robot.initializeRobot(config = ComponentConfig.disableAll())
+        robot.startRecording()
+        robot.recordState(force = true)
+        robot.start()
+        robot.recordState(force = true)
         robot.reset()
+        robot.recordState(force = true) // No recorder remains after reset.
+        robot.lastRecorder!!.awaitClosed()
 
-        assertEquals(1, last.releases)
-        assertFalse(robot.isInited)
-        assertNull(robot.initType)
+        val phases = RecordingFiles.list().single().readLines()
+            .map { JsonParser().parse(it).asJsonObject }
+            .filter { it["type"].asString == "sample" }
+            .map { it["phase"].asString }
+        assertEquals(listOf(State.INIT.name, State.PLAY.name), phases)
     }
 
-    @Test
-    fun `full initialization stores alliance on the robot instance until reset`() {
-        robot.initializeFullRobot(alliance = Alliance.RED)
+    @Test fun `recording hooks require an active session and run on the opmode thread`() {
+        assertThrows(IllegalStateException::class.java) { robot.startRecording() }
+        RecordingFiles.attach(temporary.root)
+        robot.initializeRobot(config = ComponentConfig.disableAll())
+        robot.startRecording()
+        val errors = java.util.concurrent.atomic.AtomicInteger()
+        Thread {
+            for(call in listOf({ robot.startRecording() }, { robot.recordState(force = true) })) {
+                try { call() }
+                catch(expected: IllegalStateException) { errors.incrementAndGet() }
+            }
+        }.apply { start(); join() }
+        assertEquals(2, errors.get())
+        robot.recordState(force = true)
+        robot.reset()
+        robot.lastRecorder!!.awaitClosed()
+        assertEquals(1, RecordingFiles.list().single().readLines().count {
+            JsonParser().parse(it).asJsonObject["type"].asString == "sample"
+        })
+    }
 
-        assertEquals(Alliance.RED, robot.alliance)
-        assertEquals(Alliance.RED, robot.seasonInstance.alliance)
+    @Test fun `session alliance is replaced at boundaries without changing the robot`() {
+        robot.initializeRobot(Alliance.RED)
         assertEquals("red", Alliance.pick("blue", "red"))
-
         robot.reset()
-
         assertThrows(IllegalStateException::class.java) { robot.alliance }
-        assertThrows(IllegalStateException::class.java) { Alliance.pick("blue", "red") }
-    }
-
-    @Test
-    fun `failed full initialization does not leak alliance`() {
-        assertThrows(IllegalStateException::class.java) {
-            robot.failFullInitialization(Alliance.BLUE)
-        }
-
-        assertFalse(robot.isInited)
-        assertNull(robot.initType)
-        assertThrows(IllegalStateException::class.java) { robot.alliance }
-        assertThrows(IllegalStateException::class.java) { Alliance.pick("blue", "red") }
+        robot.initializeRobot(Alliance.BLUE)
+        assertEquals("blue", Alliance.pick("blue", "red"))
     }
 }

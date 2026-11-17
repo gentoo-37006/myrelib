@@ -14,7 +14,7 @@ import org.junit.Test
  */
 class AutonSequenceTest {
     private val robot = LifecycleRobot
-    @Before fun initialize() { robot.reset(); robot.initializeFullRobot() }
+    @Before fun initialize() { robot.reset(); robot.initializeRobot() }
     @After fun cleanup() { robot.reset() }
     private fun AutonSequence.tick() { robot.components.tick() }
     private fun builder(

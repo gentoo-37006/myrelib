@@ -23,7 +23,7 @@ class InputBindingsTest {
     @Before
     fun initializeRobot() {
         robot.reset()
-        robot.initializeFullRobot()
+        robot.initializeRobot()
     }
 
     @After

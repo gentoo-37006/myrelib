@@ -11,7 +11,7 @@ import com.qualcomm.robotcore.hardware.ServoControllerEx
 import com.qualcomm.robotcore.hardware.ServoImplEx
 import com.qualcomm.robotcore.hardware.configuration.typecontainers.MotorConfigurationType
 import com.qualcomm.robotcore.hardware.configuration.typecontainers.ServoConfigurationType
-import gentoo.myrelib.component.HardwareAccess
+import gentoo.myrelib.hardware.HardwareAccess
 import java.lang.reflect.Proxy
 import org.junit.Assert.assertEquals
 import org.junit.Test

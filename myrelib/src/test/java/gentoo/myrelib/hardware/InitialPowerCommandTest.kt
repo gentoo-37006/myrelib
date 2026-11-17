@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.HardwareDevice
 import com.qualcomm.robotcore.hardware.HardwareMap
 import com.qualcomm.robotcore.hardware.ServoControllerEx
 import com.qualcomm.robotcore.hardware.configuration.typecontainers.ServoConfigurationType
-import gentoo.myrelib.component.HardwareAccess
+import gentoo.myrelib.hardware.HardwareAccess
 import java.lang.reflect.Proxy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

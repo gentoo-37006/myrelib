@@ -83,7 +83,7 @@ class PoseRepositoryTest {
         elapsed += 20
         engine.completeAutonTracking(Pose(5.0, 9.0, 100.0))
 
-        // Any full-init opmode ticks the follower, and the follower records every
+        // Any opmode with motion enabled ticks the follower, and the follower records every
         // loop. One that never begins its own session - a debug drive opmode, say
         // - must not be attributed to the auton that already finished.
         elapsed += 20

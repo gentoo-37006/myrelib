@@ -2,14 +2,17 @@ package org.firstinspires.ftc.teamcode.component
 
 import com.qualcomm.robotcore.hardware.Servo
 import gentoo.myrelib.component.FSM
-import gentoo.myrelib.component.HardwareAccess
 import gentoo.myrelib.component.StatefulComponent
 
-class Claw(hardware: HardwareAccess, disabled: Boolean) : StatefulComponent<Claw.State>(hardware, disabled) {
+class Claw : StatefulComponent<Claw.State>() {
     enum class State { CLOSED, OPEN }
 
-    // Always use the component's scoped access, including during construction.
-    private val servo = this.hardware.get<Servo>(HARDWARE_NAME)
+    private var servo: Servo? = null
+
+    override fun onAttach() {
+        servo = hardware.get(HARDWARE_NAME)
+    }
+
     override val fsm = FSM(State.CLOSED)
 
     fun open() = changeState { from(State.CLOSED) to State.OPEN }
@@ -19,15 +22,20 @@ class Claw(hardware: HardwareAccess, disabled: Boolean) : StatefulComponent<Claw
     override fun tick() {
         if(disabled) return
         super.tick()
+        applyState()
+    }
+
+    private fun applyState() {
         servo?.position = when(state) {
             State.CLOSED -> CLOSED_POSITION
             State.OPEN -> OPEN_POSITION
         }
     }
 
-    override fun release() {
-        close()
-        if(!disabled) servo?.position = CLOSED_POSITION
+    override fun onDetach() {
+        // Apply any explicit cancellation transition, then drop this run's handle.
+        try { if(!disabled) applyState() }
+        finally { servo = null }
     }
 
     companion object {

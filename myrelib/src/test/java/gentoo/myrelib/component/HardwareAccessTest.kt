@@ -1,6 +1,7 @@
 package gentoo.myrelib.component
 
 import com.qualcomm.robotcore.hardware.DcMotorEx
+import gentoo.myrelib.hardware.HardwareAccess
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test

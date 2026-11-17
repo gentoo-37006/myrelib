@@ -10,7 +10,6 @@ import com.pedropathing.math.Pose as PedroPose
 import com.pedropathing.math.Vector2D
 import com.pedropathing.paths.PathTracker
 import gentoo.myrelib.hardware.testHardwareScope
-import gentoo.myrelib.robot.LifecycleInstance
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.pathing.AutonSequence
 import gentoo.myrelib.pathing.Linear
@@ -24,7 +23,7 @@ import org.junit.Test
 
 class TimeoutInterruptionTest {
     private val robot = LifecycleRobot
-    @Before fun initialize() { robot.reset(); robot.initializeFullRobot() }
+    @Before fun initialize() { robot.reset(); robot.initializeRobot() }
     @After fun cleanup() { robot.reset() }
 
     private class LocalizerStub : Localizer {
@@ -59,9 +58,14 @@ class TimeoutInterruptionTest {
 
     @Test fun `auton follow timeout must stop the follower`() {
         val follower = Follower(LocalizerStub(), DriveStub(), AlgorithmStub())
-        robot.initializeFullRobot(LifecycleInstance(
-            hardwareAccess = testHardwareScope(), followerFactory = { follower },
-        ))
+        robot.initializeRobot(
+            hardware = testHardwareScope(), followerFactory = { follower },
+            config = object : gentoo.myrelib.config.ComponentConfig() {
+                override fun componentBindings() = bind(
+                    LifecycleRobot::component to true, LifecycleRobot::last to true,
+                )
+            },
+        )
         val path = Path(Linear(Pose(), Pose(10.0, 0.0)))
         val sequence = AutonSequence.Factory(Alliance.BLUE).autonSequence(Alliance.BLUE)
             .run(BuiltInActions.FOLLOW(path), timeoutSeconds = 0.0).wait(30.0).build()

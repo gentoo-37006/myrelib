@@ -1,35 +1,28 @@
 package org.firstinspires.ftc.teamcode.opmode
 
-import com.qualcomm.robotcore.eventloop.opmode.OpMode
+import gentoo.myrelib.opmode.RobotOpMode
 import gentoo.myrelib.pathing.Auton
 import gentoo.myrelib.pathing.AutonSequence
 import gentoo.myrelib.util.Alliance
 import org.firstinspires.ftc.teamcode.robot.Robot
 
 @Auton
-abstract class TestAuton(protected val alliance: Alliance) : OpMode() {
+abstract class TestAuton(protected val alliance: Alliance) : RobotOpMode(alliance, Robot) {
     private lateinit var sequence: AutonSequence
-
     protected abstract fun buildSequence(): AutonSequence
 
-    override fun init() {
-        Robot.init(alliance, hardwareMap, javaClass.simpleName)
+    override fun initStart() {
         sequence = buildSequence()
         Robot.motion.setPose(sequence.startPose)
+        Robot.startRecording()
     }
 
-    override fun init_loop() {
-        Robot.components.tick()
-        Robot.recordState("INIT")
-    }
+    override fun initTick() = Robot.recordState()
 
-    override fun start() = sequence.start()
+    override fun playStart() = sequence.start()
 
-    override fun loop() {
-        Robot.components.tick()
+    override fun playTick() {
         Robot.recordState()
         telemetry.addData("Step", sequence.actionIndex)
     }
-
-    override fun stop() = Robot.reset()
 }

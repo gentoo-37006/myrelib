@@ -1,5 +1,6 @@
 package gentoo.myrelib.opmode
 
+import com.qualcomm.robotcore.hardware.HardwareMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
@@ -51,4 +52,35 @@ class OpModeStopTest {
         assertEquals(listOf(0, 1, 2), events)
         assertTrue(failure.suppressed.isEmpty())
     }
+
+    @Test
+    fun `user lifecycle failures still run framework cleanup and retain its failure`() {
+        for(failingPhase in listOf("INIT", "INIT_LOOP", "START", "LOOP", "STOP")) {
+            val original = IllegalStateException("user hook failed")
+            val cleanupFailure = AssertionError("cleanup failed")
+            var cleaned = 0
+            val opMode = object : OpMode() {
+                override fun initStart() { if(failingPhase == "INIT") throw original }
+                override fun initTick() { if(failingPhase == "INIT_LOOP") throw original }
+                override fun playStart() { if(failingPhase == "START") throw original }
+                override fun playTick() { if(failingPhase == "LOOP") throw original }
+                override fun playStop() { if(failingPhase == "STOP") throw original }
+                override fun cleanup() { cleaned++; throw cleanupFailure }
+            }
+            opMode.hardwareMap = object : HardwareMap(null, null) {
+                override fun <T : Any?> getAll(type: Class<out T>): MutableList<T> = mutableListOf()
+            }
+            val failure = assertThrows(IllegalStateException::class.java) {
+                opMode.init()
+                opMode.init_loop()
+                opMode.start()
+                opMode.loop()
+                opMode.stop()
+            }
+            assertSame(original, failure)
+            assertEquals(listOf(cleanupFailure), failure.suppressed.toList())
+            assertEquals(1, cleaned)
+        }
+    }
+
 }
