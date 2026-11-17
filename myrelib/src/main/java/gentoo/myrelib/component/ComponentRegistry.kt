@@ -1,4 +1,4 @@
-package gentoo.myrelib3.component
+package gentoo.myrelib.component
 
 /** The ordered registry of components owned by one robot instance. */
 class ComponentRegistry {

@@ -1,4 +1,4 @@
-package gentoo.myrelib3.component
+package gentoo.myrelib.component
 
 /** An opmode-thread state machine with optional transition callbacks and per-state ticks. */
 class FSM<State : Enum<State>>(initialState: State) {

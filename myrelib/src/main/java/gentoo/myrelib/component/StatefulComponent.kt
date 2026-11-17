@@ -1,4 +1,4 @@
-package gentoo.myrelib3.component
+package gentoo.myrelib.component
 
 import gentoo.myrelib.hardware.HardwareAccess
 

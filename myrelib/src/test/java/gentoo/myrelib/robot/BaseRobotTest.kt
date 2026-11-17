@@ -63,7 +63,7 @@ internal open class LifecycleInstance(
         alliance = alliance,
     ),
 ) {
-    val component by register { hardware, disabled ->
+    val component by component { hardware, disabled ->
         LifecycleComponent(hardware, disabled)
     }
 }
@@ -72,7 +72,7 @@ private class ConfiguredLifecycleInstance(
     hardwareAccess: HardwareAccess,
     config: ComponentConfig,
 ) : BaseRobotInstance(Context(hardwareAccess, config, lifecycleFollowerFactory)) {
-    val component by register { hardware, disabled ->
+    val component by component { hardware, disabled ->
         LifecycleComponent(hardware, disabled)
     }
 }

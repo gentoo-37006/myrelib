@@ -1,4 +1,6 @@
-package gentoo.myrelib3.component
+package gentoo.myrelib.component
+
+import gentoo.myrelib3.component.ActionController
 
 /** A map of components that guarantees the ActionController component will always iterate first. */
 class ComponentMap {

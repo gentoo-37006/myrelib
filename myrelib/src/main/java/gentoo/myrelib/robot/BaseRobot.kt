@@ -9,8 +9,8 @@ import gentoo.myrelib.util.Alliance
 import gentoo.myrelib3.action.ActionInstance
 import gentoo.myrelib3.action.ActionType
 import gentoo.myrelib3.component.ActionController
-import gentoo.myrelib3.component.Component
-import gentoo.myrelib3.component.ComponentRegistry
+import gentoo.myrelib.component.Component
+import gentoo.myrelib.component.ComponentRegistry
 import gentoo.myrelib3.component.MotionController
 import gentoo.myrelib3.config.ComponentConfig
 import gentoo.myrelib3.field.FieldPoseBridge
@@ -35,6 +35,12 @@ data class Context(
     val alliance: Alliance? = null
 )
 
+enum class State {
+    IDLE,
+    INIT,
+    PLAY
+}
+
 /**
  * The reusable robot instance, created once per [OpMode].
  * It is the only place where components are registered.
@@ -45,13 +51,13 @@ open class BaseRobotInstance(private val context: Context) {
     val alliance: Alliance? = context.alliance
 
     val components = ComponentRegistry()
-    val actions by register(::ActionController)
-    val motion by register { hardware, disabled ->
+    val actions by component(::ActionController)
+    val motion by component { hardware, disabled ->
         MotionController(hardware, context.followerFactory, disabled)
     }
 
     /** Registers a component whose registry/configuration key is its property name. */
-    protected fun <T : Component> register(
+    protected fun <T : Component> component(
         factory: (hardware: HardwareAccess, disabled: Boolean) -> T
     ) = ComponentDelegate { name ->
         val component = factory(hardware, config.isDisabled(name))
@@ -95,15 +101,14 @@ open class BaseRobotInstance(private val context: Context) {
 }
 
 /**
- * Process-wide robot lifecycle with explicit full and empty initialization.
- * A season object extends this class and only supplies its full composition and
- * season-specific state/accessors.
+ * Process-wide robot lifecycle. The robot defines and stores the hardware and logical components
+ * that are used throughout a game.
  */
 abstract class BaseRobot<T : BaseRobotInstance> {
     companion object {
         val INSTANCE: BaseRobot<*>
             get() = singleton
-                ?: throw IllegalStateException("The robot singleton has not been created")
+                ?: throw IllegalStateException("Robot singleton not present")
 
         private var singleton: BaseRobot<*>? = null
     }

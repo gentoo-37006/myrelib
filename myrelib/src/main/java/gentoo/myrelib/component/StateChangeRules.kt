@@ -1,4 +1,4 @@
-package gentoo.myrelib3.component
+package gentoo.myrelib.component
 
 /** Rules evaluated against the state captured when a changeState block begins. */
 class StateChangeRules<State : Enum<State>> internal constructor(private val current: State) {

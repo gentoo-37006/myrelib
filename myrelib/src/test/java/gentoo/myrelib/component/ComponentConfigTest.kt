@@ -14,7 +14,7 @@ private val testFollowerFactory: (HardwareMap) -> Follower = {
 }
 
 private class ConfigurableInstance : BaseRobotInstance(Context(followerFactory = testFollowerFactory)) {
-    val component by register { hardware, disabled ->
+    val component by component { hardware, disabled ->
         object : Component(hardware, disabled) {
             override fun tick() = Unit
         }

@@ -7,6 +7,7 @@ import com.pedropathing.follower.ManualDrive
 import com.pedropathing.paths.Path
 import com.pedropathing.utils.Angle
 import com.qualcomm.robotcore.hardware.HardwareMap
+import gentoo.myrelib.component.Component
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.robot.BaseRobot
 import gentoo.myrelib3.field.FieldPath

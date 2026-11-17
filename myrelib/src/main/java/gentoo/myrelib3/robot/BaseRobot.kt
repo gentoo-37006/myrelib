@@ -7,8 +7,8 @@ import com.qualcomm.robotcore.util.RobotLog
 import gentoo.myrelib3.action.ActionInstance
 import gentoo.myrelib3.action.ActionType
 import gentoo.myrelib3.component.ActionController
-import gentoo.myrelib3.component.Component
-import gentoo.myrelib3.component.ComponentRegistry
+import gentoo.myrelib.component.Component
+import gentoo.myrelib.component.ComponentRegistry
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib3.component.MotionController
 import gentoo.myrelib3.config.ComponentConfig

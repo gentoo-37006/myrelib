@@ -7,6 +7,7 @@ import gentoo.myrelib.action.ActionType
 import gentoo.myrelib.action.BlockedBehavior
 import gentoo.myrelib.action.ConflictBehavior
 import gentoo.myrelib.action.InterruptedBehavior
+import gentoo.myrelib.component.Component
 import gentoo.myrelib.hardware.HardwareAccess
 
 class ActionController(

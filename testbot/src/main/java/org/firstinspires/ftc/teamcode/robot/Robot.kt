@@ -12,7 +12,7 @@ import gentoo.myrelib.util.Alliance
 import org.firstinspires.ftc.teamcode.component.Claw
 
 class RobotInstance(context: Context) : BaseRobotInstance(context) {
-    val claw by register(::Claw)
+    val claw by component(::Claw)
 }
 
 object RobotConfig : ComponentConfig() {
