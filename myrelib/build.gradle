@@ -1,5 +1,8 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
+
 apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'com.vanniktech.maven.publish'
 
 android {
     namespace = 'gentoo.myrelib'
@@ -26,4 +29,12 @@ dependencies {
     implementation "org.firstinspires.ftc:FtcCommon:${ftcSdkVersion}"
     api "com.pedropathing:revhub:${pedroVersion}"
     testImplementation 'junit:junit:4.13.2'
+}
+
+mavenPublishing {
+    configure(new AndroidSingleVariantLibrary())
+    pom {
+        name = 'myrelib'
+        description = 'Kotlin robot framework for FTC with Pedro Pathing integration.'
+    }
 }

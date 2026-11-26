@@ -19,8 +19,25 @@ repositories {
     maven { url 'https://repo.dairy.foundation/releases/' }
 }
 
+def verifyPublication = providers.gradleProperty('verifyPublication').isPresent()
+if (verifyPublication) {
+    repositories {
+        exclusiveContent {
+            forRepository {
+                maven { url = rootProject.layout.buildDirectory.dir('publication-test-repo') }
+            }
+            filter { includeGroup(project.group.toString()) }
+        }
+    }
+}
+
 dependencies {
-    implementation project(':myrelib')
-    ksp project(':processor')
+    if (verifyPublication) {
+        implementation "${project.group}:myrelib:${project.version}"
+        ksp "${project.group}:myrelib-processor:${project.version}"
+    } else {
+        implementation project(':myrelib')
+        ksp project(':processor')
+    }
     testImplementation 'junit:junit:4.13.2'
 }

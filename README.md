@@ -20,11 +20,69 @@ folder in Android Studio, or set `ANDROID_HOME` / `ANDROID_SDK_ROOT`. A local
 On Windows use `gradlew.bat` (or `.\gradlew.bat` in PowerShell).
 
 The AAR is written to `myrelib/build/outputs/aar/myrelib-release.aar`; the
-processor JAR is written under `processor/build/libs/`. These build
-outputs do not include a Maven publication or bundle transitive dependencies.
+processor JAR is written under `processor/build/libs/`. The Maven publications
+include metadata so Gradle can resolve their transitive dependencies.
 
 SDK, Pedro, and KSP API versions have one source in root `gradle.properties`.
 Keep the consuming robot application's SDK and Pedro dependencies aligned.
+
+## Use a published release
+
+After the first Maven Central release, add these dependencies to your FTC
+module. Apply the KSP plugin if you use the auton wrapper generator.
+
+```groovy
+def myrelibVersion = '0.+'
+dependencies {
+    implementation "io.github.gentoo-37006:myrelib:${myrelibVersion}"
+    ksp "io.github.gentoo-37006:myrelib-processor:${myrelibVersion}"
+}
+```
+
+Keep `mavenCentral()` and `google()` in your repositories. For Pedro Pathing,
+also keep `maven { url 'https://repo.dairy.foundation/releases/' }`. The AAR
+contains the viewer, so consumers can build without GitHub credentials.
+
+`0.+` follows minor releases within major version `0`. Change the
+selector to opt into a new major, or use the same exact version for both
+dependencies to pin a build. Gradle caches dynamic versions for 24 hours by
+default. Use `--refresh-dependencies` to check for a new release immediately.
+
+## Publish a release
+
+1. Verify the `GROUP` namespace from `gradle.properties` in the [Central Portal](https://central.sonatype.com/).
+   Generate a [publisher token](https://central.sonatype.org/publish/generate-portal-token/)
+   and create a [GPG signing key](https://central.sonatype.org/publish/requirements/gpg/).
+   Publish the public half of the signing key so Maven Central can verify signatures.
+2. In the myrelib repository's **Settings → Secrets and variables → Actions**,
+   add the secrets below. You can share these secrets with `visualizer` at
+   the organization level.
+
+   | Secret | Value |
+   | --- | --- |
+   | `MAVEN_CENTRAL_USERNAME` | Central Portal token username |
+   | `MAVEN_CENTRAL_PASSWORD` | Central Portal token password |
+   | `MAVEN_SIGNING_KEY` | ASCII-armored GPG private key |
+   | `MAVEN_SIGNING_PASSWORD` | Passphrase for the signing key |
+
+3. Publish `io.github.gentoo-37006:visualizer` to Maven Central first. Once
+   the myrelib workflow is in the default branch, open **Actions → Publish
+   myrelib to Maven Central → Run workflow**. Select the branch to publish.
+   The workflow stages both packages locally, builds and tests `testbot`
+   against them, and sends one signed deployment to Maven Central.
+
+`releaseMajor` in `gradle.properties` sets the major version. Each successful
+release increments the minor, starting at `0.0` for major `0`. Change
+`releaseMajor` to start a new major at `.0`, for example `1.0`, then `1.1`.
+The workflow uses Maven Central's published versions to select the next minor.
+
+To check the Maven packages locally without uploading them, run both commands
+in order:
+
+```sh
+./gradlew -PverifyPublication :myrelib:publishAllPublicationsToVerificationRepository :processor:publishAllPublicationsToVerificationRepository
+./gradlew -PverifyPublication :testbot:testDebugUnitTest :testbot:assembleRelease
+```
 
 ## Layout
 
@@ -189,22 +247,11 @@ including its current uncommitted library changes. That project was not changed
 and still uses its existing in-repository library. There is no automatic sync.
 
 The Hub viewer source lives in the `visualizer` repository under `src/tracker`.
-Each successful viewer publishing run on `main` updates the rolling ZIP in
-GitHub Packages. Online myrelib builds check that registry for the latest
-published viewer and pack it under `assets/field-viewer/` in the myrelib AAR.
-Gradle reads viewer credentials from an ignored `.env` file at the root of
-myrelib. Use plain `KEY=value` lines without quotes:
+Online myrelib builds download the latest `0.x` ZIP of
+`io.github.gentoo-37006:visualizer` from Maven Central without credentials and
+pack it under `assets/field-viewer/` in the myrelib AAR. The installed Robot
+Controller serves the packaged assets locally.
 
-```dotenv
-GITHUB_PACKAGES_USER=your-github-username
-GITHUB_PACKAGES_TOKEN=your-classic-personal-access-token
-```
-
-Use a classic personal access token with `read:packages` and repository
-access. Exported variables with the same names take precedence, which works
-for CI. The installed Robot Controller serves the packaged assets locally.
-
-GitHub Packages is the viewer source. An online build checks for a fresh
-snapshot. If Gradle cannot resolve it, myrelib reuses the last downloaded
-archive in `.gradle/viewer-package/`. A build fails if neither is available.
-The cache survives `gradlew clean`.
+If Gradle cannot resolve the viewer, myrelib reuses the last downloaded archive
+in `.gradle/viewer-package/`. A build fails if neither is available. The cache
+survives `gradlew clean`.

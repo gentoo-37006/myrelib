@@ -1,6 +1,11 @@
 apply plugin: 'org.jetbrains.kotlin.jvm'
+apply plugin: 'com.vanniktech.maven.publish'
 
 evaluationDependsOn(':myrelib')
+
+sourceSets {
+    symbolNames
+}
 
 configurations {
     ftcProcessorApi { transitive = false }
@@ -29,8 +34,26 @@ kotlin {
 
 dependencies {
     implementation "com.google.devtools.ksp:symbol-processing-api:${kspVersion}"
-    implementation files(project(':myrelib').tasks.named('bundleLibCompileToJarRelease'))
-    implementation ftcProcessorClasses
+    symbolNamesImplementation files(project(':myrelib').tasks.named('bundleLibCompileToJarRelease'))
+    symbolNamesImplementation ftcProcessorClasses
     ftcProcessorApi "org.firstinspires.ftc:RobotCore:${ftcSdkVersion}"
     testImplementation 'junit:junit:4.13.2'
+}
+
+// Resolve referenced types at build time. KSP's JVM classpath cannot load Android AARs.
+def generatedSymbolsDirectory = layout.buildDirectory.dir('generated/auton-symbols')
+def generateAutonSymbols = tasks.register('generateAutonSymbols', JavaExec) {
+    classpath = sourceSets.symbolNames.runtimeClasspath
+    mainClass = 'gentoo.myrelib.processor.GenerateAutonSymbolsKt'
+    outputs.dir(generatedSymbolsDirectory)
+    args(generatedSymbolsDirectory.get().file('AutonSymbols.kt').asFile)
+}
+kotlin.sourceSets.main.kotlin.srcDir(generateAutonSymbols)
+
+mavenPublishing {
+    coordinates(project.group.toString(), 'myrelib-processor', project.version.toString())
+    pom {
+        name = 'myrelib KSP processor'
+        description = 'Generates alliance-specific FTC autonomous opmode wrappers from myrelib declarations.'
+    }
 }

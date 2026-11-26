@@ -28,6 +28,13 @@ desktop tests runnable without a Robot Controller. Its motion component stays
 disabled until a real follower factory is supplied; path tests check authoring
 and scheduling, not simulated drivetrain motion.
 
+Publish the Android AAR and KSP JAR at the same version through the manual
+Maven Central workflow. `releaseMajor` sets the major. The workflow starts each
+new major at minor `0` and increments the minor from Maven Central's published
+versions. Consumers can use a major-version selector such as `0.+`.
+The workflow uses `-PverifyPublication` to stage both artifacts in a local Maven
+repository and run the sandbox against them before publishing.
+
 Keep this file synchronized with framework architecture and extension contracts.
 Test stable, general behaviors and shared contracts: scheduling, lifecycle,
 hardware scoping, coordinates, persistence, configuration, and file protocols.
@@ -119,15 +126,18 @@ manager, and assets live in this library. Do not retain robot objects, Pedro
 paths, or callbacks in app-lifetime bridges. Do not put this library in Sloth's
 replacement packages; framework or asset changes need a full consumer APK push.
 The viewer source is in the `visualizer` repository under `src/tracker`.
-Builds of `main` publish a rolling viewer ZIP to GitHub Packages. Online
-Gradle builds check for the latest published snapshot and package it into the
-myrelib AAR. If package resolution fails, reuse the last successfully resolved
-archive from the project Gradle cache. Fail when there is no cached archive.
+The manual visualizer workflow publishes numbered ZIP releases to Maven Central
+as `io.github.gentoo-37006:visualizer`. Online Gradle builds check for the latest
+`0.x` release and package it into the myrelib AAR. If package resolution fails,
+reuse the last successfully resolved archive from the project Gradle cache.
+Fail when there is no cached archive.
 Keep the built viewer out of the repository.
 
 `@Auton` marks a base class. The processor generates blue/red FTC wrappers only
 for its direct subclasses, in the annotated base's `.generated` package. Base
 and indirect subclasses do not generate wrappers. The processor must not depend
-on a season project. Keep qualified names derived from class references.
+on a season project. Derive qualified names and alliance constants from class
+references when building the processor so its JVM runtime can run without
+Android AARs on its classpath.
 
 Never modify the original `biobuzz-2027` project as part of work in this repository.

@@ -13,13 +13,6 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous
-import gentoo.myrelib.pathing.Auton
-import gentoo.myrelib.util.Alliance
-
-private val AUTON_ANNOTATION = requireNotNull(Auton::class.qualifiedName)
-private val ALLIANCE_CLASS = requireNotNull(Alliance::class.qualifiedName)
-private val FTC_AUTONOMOUS_ANNOTATION = requireNotNull(Autonomous::class.qualifiedName)
 
 class AutonProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
@@ -108,9 +101,8 @@ private class AutonProcessor(
         val basePackage = baseClass.packageName.asString()
         val generatedPackage = if(basePackage.isEmpty()) "generated" else "$basePackage.generated"
         val baseName = declaration.simpleName.asString()
-        Alliance.entries.forEach { alliance ->
-            val displayName = alliance.name.lowercase().replaceFirstChar(Char::uppercase)
-            val enumName = alliance.name
+        ALLIANCE_NAMES.forEach { enumName ->
+            val displayName = enumName.lowercase().replaceFirstChar(Char::uppercase)
             val generatedName = "${displayName}_$baseName"
             val generatedQualifiedName = "$generatedPackage.$generatedName"
             val previousDeclaration = generatedClasses.putIfAbsent(generatedQualifiedName, qualifiedName)

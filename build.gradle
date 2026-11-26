@@ -1,3 +1,6 @@
+import com.vanniktech.maven.publish.DeploymentValidation
+import org.gradle.jvm.tasks.Jar
+
 buildscript {
     repositories {
         mavenCentral()
@@ -11,11 +14,44 @@ buildscript {
 
 plugins {
     id 'com.android.library' version '8.13.2' apply false
+    id 'com.vanniktech.maven.publish' version '0.36.0' apply false
 }
 
+def releaseVersion = providers.environmentVariable('MYRELIB_RELEASE_VERSION').map { version ->
+    if (!(version ==~ "${releaseMajor}\\.(0|[1-9][0-9]*)")) {
+        throw new GradleException("Expected a ${releaseMajor}.<minor> release version, got ${version}")
+    }
+    version
+}.orElse("${releaseMajor}.0-SNAPSHOT").get()
+def verifyPublication = providers.gradleProperty('verifyPublication').isPresent()
+
 allprojects {
+    group = GROUP
+    version = releaseVersion
     repositories {
         mavenCentral()
         google()
+    }
+}
+
+subprojects { subproject ->
+    subproject.pluginManager.withPlugin('com.vanniktech.maven.publish') {
+        subproject.tasks.withType(Jar).configureEach { jar ->
+            if (jar.name in ['emptyJavadocJar', 'plainJavadocJar']) {
+                jar.from(rootProject.file('README.md'), rootProject.file('LICENSE'))
+            }
+        }
+
+        if (verifyPublication) {
+            subproject.publishing.repositories.maven {
+                name = 'verification'
+                url = rootProject.layout.buildDirectory.dir('publication-test-repo')
+            }
+        } else {
+            subproject.mavenPublishing {
+                publishToMavenCentral(false, DeploymentValidation.PUBLISHED)
+                signAllPublications()
+            }
+        }
     }
 }

@@ -1,0 +1,51 @@
+name: Publish myrelib to Maven Central
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maven-central-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Select the next myrelib version
+        run: |
+          version=$(python3 .github/scripts/next-release-version.py)
+          printf 'MYRELIB_RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          printf 'Publishing myrelib %s\n' "$version"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install Android SDK platform
+        run: sdkmanager 'platforms;android-36'
+
+      - name: Test and stage the Maven artifacts locally
+        run: |
+          ./gradlew -PverifyPublication :myrelib:testDebugUnitTest \
+            :myrelib:publishAllPublicationsToVerificationRepository \
+            :processor:publishAllPublicationsToVerificationRepository
+
+      - name: Build the sandbox against the staged artifacts
+        run: ./gradlew -PverifyPublication :testbot:testDebugUnitTest :testbot:assembleRelease
+
+      - name: Publish both artifacts to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_SIGNING_PASSWORD }}
+        run: ./gradlew publishAndReleaseToMavenCentral
