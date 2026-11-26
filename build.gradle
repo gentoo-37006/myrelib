@@ -1,4 +1,3 @@
-import com.vanniktech.maven.publish.DeploymentValidation
 import org.gradle.jvm.tasks.Jar
 
 buildscript {
@@ -24,6 +23,7 @@ def releaseVersion = providers.environmentVariable('MYRELIB_RELEASE_VERSION').ma
     version
 }.orElse("${myrelib_version}.0-SNAPSHOT").get()
 def verifyPublication = providers.gradleProperty('verifyPublication').isPresent()
+def signPublication = providers.gradleProperty('signPublication').isPresent()
 
 allprojects {
     group = GROUP
@@ -47,11 +47,9 @@ subprojects { subproject ->
                 name = 'verification'
                 url = rootProject.layout.buildDirectory.dir('publication-test-repo')
             }
-        } else {
-            subproject.mavenPublishing {
-                publishToMavenCentral(false, DeploymentValidation.PUBLISHED)
-                signAllPublications()
-            }
+        }
+        if (signPublication) {
+            subproject.mavenPublishing.signAllPublications()
         }
     }
 }

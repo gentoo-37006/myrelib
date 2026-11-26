@@ -69,7 +69,8 @@ default. Use `--refresh-dependencies` to check for a new release immediately.
    the myrelib workflow is in the default branch, open **Actions → Publish
    myrelib to Maven Central → Run workflow**. Select the branch to publish.
    The workflow stages both packages locally, builds and tests `testbot`
-   against them, and sends one signed deployment to Maven Central.
+   against them, and sends one signed deployment named `myrelib-<version>` to
+   Maven Central.
 
 `releaseMajor` in `gradle.properties` sets the major version. Each successful
 release increments the minor, starting at `0.0` for major `0`. Change
