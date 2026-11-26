@@ -8,7 +8,7 @@ buildscript {
     }
     dependencies {
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10'
-        classpath "com.google.devtools.ksp:symbol-processing-gradle-plugin:${kspVersion}"
+        classpath "com.google.devtools.ksp:symbol-processing-gradle-plugin:${ksp_version}"
     }
 }
 
@@ -18,11 +18,11 @@ plugins {
 }
 
 def releaseVersion = providers.environmentVariable('MYRELIB_RELEASE_VERSION').map { version ->
-    if (!(version ==~ "${releaseMajor}\\.(0|[1-9][0-9]*)")) {
-        throw new GradleException("Expected a ${releaseMajor}.<minor> release version, got ${version}")
+    if (!(version ==~ "${myrelib_version}\\.(0|[1-9][0-9]*)")) {
+        throw new GradleException("Expected a ${myrelib_version}.<minor> release version, got ${version}")
     }
     version
-}.orElse("${releaseMajor}.0-SNAPSHOT").get()
+}.orElse("${myrelib_version}.0-SNAPSHOT").get()
 def verifyPublication = providers.gradleProperty('verifyPublication').isPresent()
 
 allprojects {

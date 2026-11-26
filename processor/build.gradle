@@ -33,10 +33,10 @@ kotlin {
 }
 
 dependencies {
-    implementation "com.google.devtools.ksp:symbol-processing-api:${kspVersion}"
+    implementation "com.google.devtools.ksp:symbol-processing-api:${ksp_version}"
     symbolNamesImplementation files(project(':myrelib').tasks.named('bundleLibCompileToJarRelease'))
     symbolNamesImplementation ftcProcessorClasses
-    ftcProcessorApi "org.firstinspires.ftc:RobotCore:${ftcSdkVersion}"
+    ftcProcessorApi "org.firstinspires.ftc:RobotCore:${ftc_sdk_version}"
     testImplementation 'junit:junit:4.13.2'
 }
 

@@ -24,10 +24,10 @@ repositories {
 }
 
 dependencies {
-    api "org.firstinspires.ftc:RobotCore:${ftcSdkVersion}"
-    api "org.firstinspires.ftc:Hardware:${ftcSdkVersion}"
-    implementation "org.firstinspires.ftc:FtcCommon:${ftcSdkVersion}"
-    api "com.pedropathing:revhub:${pedroVersion}"
+    api "org.firstinspires.ftc:RobotCore:${ftc_sdk_version}"
+    api "org.firstinspires.ftc:Hardware:${ftc_sdk_version}"
+    implementation "org.firstinspires.ftc:FtcCommon:${ftc_sdk_version}"
+    api "com.pedropathing:revhub:${pedro_version}"
     testImplementation 'junit:junit:4.13.2'
 }
 
