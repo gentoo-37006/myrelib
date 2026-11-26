@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous
+import com.qualcomm.robotcore.eventloop.opmode.OpMode
 import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.config.ComponentConfig
@@ -21,9 +22,22 @@ import org.junit.Test
 
 /** Uses only the public library API, compiled from a separate consuming module. */
 class ConsumerContractTest {
+    private fun initializeRobot(
+        alliance: Alliance = Alliance.BLUE,
+        hardware: HardwareAccess = HardwareAccess.empty(),
+        componentConfig: ComponentConfig = Robot.config,
+    ) {
+        val opMode = object : OpMode() {
+            override fun init() = Unit
+            override fun loop() = Unit
+        }
+        Robot.startOpModeForTest(opMode, alliance, hardware, componentConfig)
+        assertSame(opMode, Robot.session.opMode)
+    }
+
     @Before fun initialize() {
         Robot.reset()
-        Robot.initForTest()
+        initializeRobot()
         Robot.claw.close()
         Robot.reset()
     }
@@ -33,7 +47,7 @@ class ConsumerContractTest {
     @Test
     fun `input edges schedule and cancel a consumer action through the component loop`() {
         val hardware = FakeHardware()
-        Robot.initForTest(hardware = hardware.access)
+        initializeRobot(hardware = hardware.access)
         var pressed = false
         val inputs = InputBindings()
         inputs.trigger { pressed }.onChange(ClawActions.HOLD_OPEN)
@@ -59,7 +73,7 @@ class ConsumerContractTest {
 
     @Test
     fun `conflicting consumer action cancels the previous owner's work`() {
-        Robot.initForTest()
+        initializeRobot()
         ClawActions.HOLD_OPEN.submit()
         assertEquals(Claw.State.OPEN, Robot.claw.state)
 
@@ -76,7 +90,7 @@ class ConsumerContractTest {
             override fun componentBindings() = bind(Robot::actions to false)
         }
         // An accidental lookup of testClaw on this available scope would throw.
-        Robot.initForTest(
+        initializeRobot(
             hardware = HardwareAccess.from(object : HardwareMap(null, null) {
                 override fun <T : Any?> get(classOrInterface: Class<out T>, deviceName: String): T {
                     error("Disabled component queried $deviceName")
@@ -100,7 +114,7 @@ class ConsumerContractTest {
     @Test
     fun `reset cancels consumer actions and reattaches the same components`() {
         val hardware = FakeHardware()
-        Robot.initForTest(hardware = hardware.access)
+        initializeRobot(hardware = hardware.access)
         val oldClaw = Robot.claw
         ClawActions.HOLD_OPEN.submit()
         Robot.components.tick()
@@ -111,7 +125,7 @@ class ConsumerContractTest {
         assertEquals(Claw.CLOSED_POSITION, hardware.positions.last(), 0.0)
         assertFalse(Robot.isInited)
 
-        Robot.initForTest()
+        initializeRobot()
         assertSame(oldClaw, Robot.claw)
         assertTrue(Robot.runningActions.isEmpty())
         assertEquals(Claw.State.CLOSED, Robot.claw.state)
@@ -120,7 +134,7 @@ class ConsumerContractTest {
     @Test
     fun `ordinary component state persists across opmodes without a persistence field`() {
         val autonHardware = FakeHardware()
-        Robot.initForTest(hardware = autonHardware.access)
+        initializeRobot(hardware = autonHardware.access)
         val claw = Robot.claw
         claw.open()
         Robot.components.tick()
@@ -129,7 +143,7 @@ class ConsumerContractTest {
         assertTrue(claw.disabled)
 
         val teleopHardware = FakeHardware()
-        Robot.initForTest(hardware = teleopHardware.access)
+        initializeRobot(hardware = teleopHardware.access)
         assertSame(claw, Robot.claw)
         assertEquals(Claw.State.OPEN, Robot.claw.state)
         assertTrue(teleopHardware.positions.isEmpty())
@@ -139,7 +153,7 @@ class ConsumerContractTest {
 
     @Test
     fun `disabled consumer configuration uses normal initialization and rejects action submissions`() {
-        Robot.initForTest(componentConfig = ComponentConfig.disableAll())
+        initializeRobot(componentConfig = ComponentConfig.disableAll())
         ClawActions.HOLD_OPEN.submit()
         Robot.claw.open()
         Robot.components.tick()
@@ -154,7 +168,7 @@ class ConsumerContractTest {
     @Test
     fun `consumer auton mirrors alliance geometry and completes through normal scheduling`() {
         for(alliance in Alliance.entries) {
-            Robot.initForTest(alliance)
+            initializeRobot(alliance)
             val sequence = smokeSequence(alliance)
             val blueStart = Pose(-24.0, -24.0, 0.0)
             assertEquals(if(alliance == Alliance.BLUE) blueStart else blueStart.invert(), sequence.startPose)

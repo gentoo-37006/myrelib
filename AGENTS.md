@@ -45,8 +45,19 @@ Successfully created components are retained if a later factory fails, and only
 unfinished factories are retried. Use no-argument `Component()` /
 `StatefulComponent()` constructors. Ordinary fields and FSM state survive normal
 opmode transitions without persistence annotations. A fresh `RobotSession` owns
-each run's alliance and INIT/PLAY state; reset ends execution without discarding
-the robot or components.
+each run's FTC opmode reference and alliance. `session.opMode`
+exposes the current opmode's telemetry, gamepads, timing, and other FTC data.
+The viewer and recordings derive the opmode name from its class's simple name.
+`startOpMode(...)` takes the opmode and derives hardware access from its map,
+attaching the robot at each FTC INIT. The first call invokes internal `init()`
+to construct components once. Robot and session state follow the framework
+opmode's INIT/PLAY phase, with IDLE after reset. `start()` runs component start
+hooks and signals PLAY for bare FTC opmodes.
+Hardwareless tests supply a lightweight FTC opmode stub to the protected
+`startOpMode` seam.
+Reset drops the robot's session reference without discarding its components.
+Do not retain sessions or opmodes in persistent component fields or app-lifetime
+bridges; use the current session when opmode data is needed.
 
 Components resolve devices only through protected component-scoped
 `HardwareAccess` in `onAttach`, which configures hardware and refreshes current
@@ -66,7 +77,8 @@ resources and allows retry with the same component objects.
 `RobotOpMode` owns per-opmode input bindings, ticks components once per loop,
 clears bulk caches before attachment/loops, and guarantees cleanup after user
 hook failures. Consumers override the public lifecycle hooks, not FTC methods.
-Bare FTC opmodes must call init/start/reset and manage inputs/caches themselves.
+Bare FTC opmodes must call startOpMode/start/reset and manage inputs/caches
+themselves.
 There is no background hardware polling between opmodes; movement while idle is
 observed when attachment refreshes sensors. Persistence lasts for this robot
 singleton, not across an app restart, power loss, or code reload.
@@ -88,24 +100,30 @@ must preserve cancellation, reentrant callbacks, and all-child cleanup.
 
 Initialization has one lifecycle path. Disabling every component is ordinary
 initialization with `ComponentConfig.disableAll()`, not a separate mode.
-Opmodes opt into recording through `BaseRobot.startRecording()` and explicitly
-sample with `recordState(force = ...)`, which derives its phase from the active
-robot session state (`INIT`/`PLAY`) rather than caller-supplied strings. Neither
-initialization nor `RobotOpMode` starts or samples recordings automatically. `configureRecording` on the robot registers
-cached state suppliers. Repeated starts in a session are harmless, and reset
-always closes that session's recording without carrying it into the next run.
-State suppliers read cached values on the opmode thread; background writers
-receive detached bounded values and never block robot ticks. `motionPath` is a
-reserved framework state. Path events preserve bounded geometry between samples.
+During INIT, `configureRecording` registers cached state suppliers for the live
+viewer and optional match recording. Component ticks refresh the live feed at
+the sample interval. Opmodes opt into disk recording with `startRecording()`
+and append samples with `recordState(force = ...)`. A sample sent to both
+destinations reads each supplier once. Phase comes from the active session
+(`INIT`/`PLAY`). Reset closes the writer and clears the suppliers for the run.
+State suppliers run on the opmode thread. The live feed and background writer
+receive detached bounded data. `pose` defaults to cached localization and
+`motionPath` is reserved. Path events preserve bounded geometry between samples.
 Recording filenames use UTC creation timestamps with UUID suffixes; legacy
 epoch filenames remain readable. Match timing uses a monotonic clock.
 
-The read-only `/visualizer/` handlers, immutable feed bridge, recording file
+The viewer serves HTML and live JSON from `/visualizer/`. Its browser code
+requests JSON explicitly with `Accept: application/json`. The read-only
+handlers, immutable feed bridge, recording file
 manager, and assets live in this library. Do not retain robot objects, Pedro
 paths, or callbacks in app-lifetime bridges. Do not put this library in Sloth's
 replacement packages; framework or asset changes need a full consumer APK push.
-The viewer source is in sibling `auton-visualizer/src/tracker`; rebuild its assets
-using the command in README.md rather than hand-editing the generated bundle.
+The viewer source is in the `visualizer` repository under `src/tracker`.
+Builds of `main` publish a rolling viewer ZIP to GitHub Packages. Online
+Gradle builds check for the latest published snapshot and package it into the
+myrelib AAR. If package resolution fails, reuse the last successfully resolved
+archive from the project Gradle cache. Fail when there is no cached archive.
+Keep the built viewer out of the repository.
 
 `@Auton` marks a base class. The processor generates blue/red FTC wrappers only
 for its direct subclasses, in the annotated base's `.generated` package. Base

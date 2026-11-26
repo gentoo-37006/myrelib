@@ -10,7 +10,6 @@ import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.robot.BaseRobot
 import gentoo.myrelib.field.FieldPath
-import gentoo.myrelib.field.FieldPoseBridge
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.math.toPedro
 import gentoo.myrelib.math.toPose
@@ -91,8 +90,6 @@ open class MotionController : Component {
         turnRate = -Math.toDegrees(velocity.omega)
         PoseRepository.record(updatedPose)
         if(!follower.following()) activePath = null
-        FieldPoseBridge.publishPath(activePath, pathT)
-        FieldPoseBridge.publish(updatedPose.x, updatedPose.y, updatedPose.theta)
     }
 
     open fun follow(path: Path) {
@@ -105,9 +102,9 @@ open class MotionController : Component {
         }
         pathArcLength = PathArcLength(curves)
         follower.follow(path)
-        activePath = FieldPath.from(path, ++nextPathId)
-        FieldPoseBridge.publishPath(activePath)
-        BaseRobot.INSTANCE.recordPath(activePath!!)
+        val geometry = FieldPath.from(path, ++nextPathId)
+        activePath = geometry
+        BaseRobot.INSTANCE.recordPath(geometry)
     }
 
     private fun updatePathProgress(follower: Follower) {
@@ -238,7 +235,6 @@ open class MotionController : Component {
         this.pose = pose
         activeFollower.setPose(pose.toPedro())
         PoseRepository.record(pose)
-        FieldPoseBridge.publish(pose.x, pose.y, pose.theta)
     }
 
     override fun release() {
@@ -262,6 +258,5 @@ open class MotionController : Component {
 
     private fun clearPath() {
         activePath = null
-        FieldPoseBridge.publishPath(null)
     }
 }

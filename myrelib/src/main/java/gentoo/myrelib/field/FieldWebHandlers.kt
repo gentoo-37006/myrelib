@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.util.WebHandlerManager
 import fi.iki.elonen.NanoHTTPD
 import org.firstinspires.ftc.ftccommon.external.WebHandlerRegistrar
 import com.google.gson.Gson
+import java.io.InputStream
 
 /** These myrelib handlers and their bridge stay outside Sloth's TeamCode package. */
 object FieldWebHandlers {
@@ -25,11 +26,6 @@ object FieldWebHandlers {
                 addHeader("Content-Disposition", "attachment; filename=\"${file.name}\"")
             }
         }
-        manager.register("/visualizer/pose") { session ->
-            if (!isRead(session)) methodNotAllowed()
-            else noCache(NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", FieldPoseBridge.json()))
-        }
-
         fun registerAsset(route: String, asset: String) {
             manager.register(route) { session ->
                 if (!isRead(session)) methodNotAllowed()
@@ -46,8 +42,21 @@ object FieldWebHandlers {
         }
 
         registerDirectory("field-viewer")
-        registerAsset("/visualizer", "field-viewer/index.html")
-        registerAsset("/visualizer/", "field-viewer/index.html")
+        for (route in listOf("/visualizer", "/visualizer/")) {
+            manager.register(route) { session ->
+                visualizerPage(session) { context.assets.open("field-viewer/index.html") }
+            }
+        }
+    }
+
+    internal fun visualizerPage(session: NanoHTTPD.IHTTPSession, openPage: () -> InputStream): NanoHTTPD.Response {
+        if (!isRead(session)) return methodNotAllowed()
+        val response = if (session.headers["accept"]?.trim()?.equals("application/json", ignoreCase = true) == true) {
+            NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", RobotTelemetryBridge.json())
+        } else {
+            NanoHTTPD.newChunkedResponse(NanoHTTPD.Response.Status.OK, mimeType("index.html"), openPage())
+        }
+        return noCache(response).apply { addHeader("Vary", "Accept") }
     }
 
     private fun isRead(session: NanoHTTPD.IHTTPSession) = session.method == NanoHTTPD.Method.GET || session.method == NanoHTTPD.Method.HEAD

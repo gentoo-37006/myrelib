@@ -11,7 +11,7 @@ import gentoo.myrelib.util.cleanupAll
 abstract class RobotOpMode(
     private val alliance: Alliance? = null,
     private val robot: BaseRobot = BaseRobot.INSTANCE,
-    private val componentConfig: ComponentConfig = robot.config,
+    private val config: ComponentConfig = robot.config,
 ) : OpMode() {
     private var attachedSession: RobotSession? = null
     private var bindings: FtcInputBindings? = null
@@ -19,7 +19,7 @@ abstract class RobotOpMode(
         get() = checkNotNull(bindings) { "Inputs are available during an opmode session" }
 
     final override fun initStartPre() {
-        attachedSession = robot.init(alliance, hardwareMap, javaClass.simpleName, componentConfig)
+        attachedSession = robot.startOpMode(this, alliance, config)
         bindings = FtcInputBindings(gamepad1, gamepad2)
     }
 

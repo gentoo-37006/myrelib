@@ -5,7 +5,9 @@ import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.util.cleanupAll
 
 /** The ordered registry of components owned by one robot. */
-class ComponentRegistry {
+class ComponentRegistry internal constructor(private val afterTick: () -> Unit) {
+    constructor() : this({})
+
     private val components = ComponentMap()
     private var sealed = false
     private var owner: Thread? = null
@@ -57,6 +59,7 @@ class ComponentRegistry {
                 component.tick()
             }
         }
+        afterTick()
     }
 
     /**

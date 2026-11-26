@@ -1,10 +1,11 @@
 package gentoo.myrelib.field
 
 import com.google.gson.GsonBuilder
+import gentoo.myrelib.recording.StateSample
 import java.util.concurrent.atomic.AtomicLong
 
-/** Framework-owned app-lifetime state: never retain a hot-swapped robot, pose, or callback here. */
-object FieldPoseBridge {
+/** The web thread sees detached snapshots and never invokes robot code. */
+object RobotTelemetryBridge {
     data class PoseData(val x: Double, val y: Double, val heading: Double)
     data class RobotSize(val width: Double, val length: Double)
     data class Snapshot(
@@ -18,6 +19,9 @@ object FieldPoseBridge {
         val robot: RobotSize?,
         val path: FieldPath? = null,
         val pathT: Double = 0.0,
+        val phase: String? = null,
+        val states: Map<String, Any?> = emptyMap(),
+        val errors: Map<String, String> = emptyMap(),
     )
 
     private data class State(val snapshot: Snapshot, val publishedNanos: Long?)
@@ -33,22 +37,32 @@ object FieldPoseBridge {
     }
 
     @Synchronized
-    fun publish(x: Double?, y: Double?, heading: Double?, nowNanos: Long = System.nanoTime()) {
+    internal fun publish(sample: StateSample, path: FieldPath?, nowNanos: Long) {
         val current = state.snapshot
         if (!current.active) return
-        val pose = if (x != null && y != null && heading != null && x.isFinite() && y.isFinite() && heading.isFinite()) PoseData(x, y, heading) else null
-        state = State(current.copy(sequence = current.sequence + 1, pose = pose), nowNanos)
+        val fields = sample.states["pose"] as? Map<*, *>
+        val x = (fields?.get("x") as? Number)?.toDouble()
+        val y = (fields?.get("y") as? Number)?.toDouble()
+        val heading = (fields?.get("heading") as? Number)?.toDouble()
+        val pose = if(x?.isFinite() == true && y?.isFinite() == true && heading?.isFinite() == true)
+            PoseData(x, y, heading) else null
+        val progress = sample.states["motionPath"] as? Map<*, *>
+        val pathT = (progress?.get("t") as? Number)?.toDouble()
+            ?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+        state = State(current.copy(
+            sequence = current.sequence + 1,
+            pose = pose,
+            path = path,
+            pathT = pathT,
+            phase = sample.phase,
+            states = sample.states,
+            errors = sample.errors,
+        ), nowNanos)
     }
 
     @Synchronized
     fun stop() {
-        state = state.copy(snapshot = state.snapshot.copy(active = false, path = null))
-    }
-
-    @Synchronized
-    fun publishPath(path: FieldPath?, t: Double = 0.0) {
-        if(!state.snapshot.active) return
-        state = state.copy(snapshot = state.snapshot.copy(path = path, pathT = t.coerceIn(0.0, 1.0)))
+        state = state.copy(snapshot = state.snapshot.copy(active = false, path = null, pathT = 0.0))
     }
 
     fun snapshot(nowNanos: Long = System.nanoTime()): Snapshot {

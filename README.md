@@ -29,7 +29,6 @@ Keep the consuming robot application's SDK and Pedro dependencies aligned.
 ## Layout
 
 - `myrelib/src/main/java/gentoo/myrelib/`: reusable framework.
-- `myrelib/src/main/assets/field-viewer/`: static Control Hub viewer.
 - `myrelib/src/test/`: framework JVM tests.
 - `processor/`: KSP auton wrapper generator, built as a JVM JAR.
 - `testbot/`: standalone consumer sandbox with sample robot and opmodes.
@@ -48,7 +47,12 @@ before then throws without constructing it; configuration can safely use propert
 references such as `Robot::turret`. Each opmode gets a new `RobotSession`, while
 component objects, ordinary fields, calibration offsets, and FSM state persist
 through `reset()` and subsequent initialization. Per-run alliance is
-`Robot.session.alliance`; device access belongs in the attachment hooks.
+`Robot.session.alliance`. The session also owns the current FTC opmode as
+`Robot.session.opMode`, so telemetry, gamepads, runtime, and other opmode data
+are available through that reference. Read it from the current session rather
+than retaining an opmode in persistent component fields. Reset releases the
+robot's session reference; the next initialization supplies the new opmode.
+Device access still belongs in the component attachment hooks.
 
 Declare components with no-argument factories, then acquire devices during
 attachment:
@@ -125,27 +129,35 @@ Extend `RobotOpMode(alliance, Robot)` and override `initStart`, `initTick`,
 caches before attachment/loops, ticks the scheduler and components once per
 loop, and always attempts cleanup. Do not tick components or the
 action controller again in these hooks. Bare FTC opmodes must call
-`Robot.init(...)`, `Robot.start()`, and `Robot.reset()` themselves and manage
+`Robot.startOpMode(this, alliance = ...)`, `Robot.start()`, and `Robot.reset()` themselves and manage
 inputs/bulk caching. Persistence ends when the robot singleton is replaced or
 the app restarts; physical references also depend on the underlying sensors.
 
 ## Initialization and recording
 
 There is one initialization path. To run with every component disabled, pass
-`ComponentConfig.disableAll()` to `Robot.init(..., componentConfig = ...)` or to
-`RobotOpMode(robot = Robot, componentConfig = ...)`. It still creates a normal
-session. Desktop integrations can use the protected initialization overload with
-`HardwareAccess.empty()`; no separate empty/full initialization mode is needed.
+`ComponentConfig.disableAll()` as `config` to `Robot.startOpMode(this, ...)` or
+`RobotOpMode(robot = Robot, ...)`. It still creates a normal session.
+The robot uses the current FTC opmode's hardware map. The viewer and recordings
+use the opmode's class simple name. `startOpMode(...)` attaches the robot during each
+opmode's INIT; its first call invokes the internal, one-time `init()` to construct
+components. `Robot.state` follows the framework opmode's INIT/PLAY phase and
+reports IDLE when there is no active session. `RobotOpMode` runs component
+start hooks at PLAY. For bare FTC opmodes, calling `Robot.start()` also signals
+the transition to PLAY. Desktop
+integrations can use the protected `startOpMode` overload with a lightweight FTC opmode stub and `HardwareAccess.empty()`;
+no separate empty/full initialization mode is needed.
 
 Recording is an explicit opmode choice. Call `Robot.startRecording()` in the
 opmode's `initStart` to include INIT, or in `playStart` to begin at PLAY. Register
 robot-specific cached state suppliers by overriding
-`configureRecording(recorder: MatchRecorder)` on the robot. Call `Robot.recordState()` from the
-opmode hooks you want to capture. Each sample uses the current robot session
-state (`INIT` or `PLAY`), so callers never supply a phase string. Neither initialization nor `RobotOpMode`
-automatically starts or samples a recording. Calls to `recordState` before an
-explicit start are harmless. Repeated `startRecording` calls in one session keep
-the existing recording; a disabled component configuration can record too.
+`configureRecording(recorder: MatchRecorder)` on the robot. This hook runs once
+per session during INIT. The same cached states feed the live viewer and
+recordings, including the default `pose` and reserved `motionPath`.
+Component ticks refresh live state at the configured sample interval. Call
+`Robot.recordState()` from the opmode hooks you want to capture on disk. Each
+sample uses the current robot session state (`INIT` or `PLAY`). Recording to
+disk starts only on request. A disabled component configuration can record too.
 
 ```kotlin
 override fun initStart() {
@@ -167,15 +179,24 @@ background writers receive only detached, bounded data. Path geometry events
 are captured while recording, including an active path when recording starts.
 The default recording configuration can be customized on `BaseRobot`.
 
+Open `/visualizer/` on the Control Hub to see the live viewer. Its browser
+code requests the same URL with `Accept: application/json` to read current
+state. The response includes `states` and `errors` alongside pose, path,
+and session information.
+
 The sources were copied from the current local `biobuzz-2027/myrelib` subtree,
 including its current uncommitted library changes. That project was not changed
 and still uses its existing in-repository library. There is no automatic sync.
 
-The Hub viewer's editable source is currently in the separate sibling
-`auton-visualizer/src/tracker` project. To refresh the packaged assets, run there:
+The Hub viewer source lives in the `visualizer` repository under `src/tracker`.
+Each successful viewer publishing run on `main` updates the rolling ZIP in
+GitHub Packages. Online myrelib builds check that registry for the latest
+published viewer and pack it under `assets/field-viewer/` in the myrelib AAR.
+Set `GITHUB_PACKAGES_USER` to your GitHub username and `GITHUB_PACKAGES_TOKEN`
+to a classic personal access token with `read:packages` and repository access.
+The installed Robot Controller serves the packaged assets locally.
 
-```sh
-npm run build:tracker -- ../myrelib/myrelib/src/main/assets/field-viewer
-```
-
-The checked-in assets require no Node.js installation to build the library.
+GitHub Packages is the viewer source. An online build checks for a fresh
+snapshot. If Gradle cannot resolve it, myrelib reuses the last downloaded
+archive in `.gradle/viewer-package/`. A build fails if neither is available.
+The cache survives `gradlew clean`.

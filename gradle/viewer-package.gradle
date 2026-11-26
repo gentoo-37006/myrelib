@@ -1,0 +1,105 @@
+import org.gradle.api.file.ArchiveOperations
+import org.gradle.api.file.FileSystemOperations
+
+import javax.inject.Inject
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+abstract class CacheViewerPackage extends DefaultTask {
+    @InputFiles
+    @PathSensitive(PathSensitivity.NONE)
+    abstract ConfigurableFileCollection getResolvedArchives()
+
+    @OutputFile
+    abstract RegularFileProperty getCachedArchive()
+
+    @TaskAction
+    void updateCache() {
+        def archives = resolvedArchives.files
+        def cache = cachedArchive.get().asFile
+        if (archives.isEmpty()) {
+            if (!cache.isFile()) {
+                throw new GradleException(
+                    'Could not resolve the viewer from GitHub Packages and no cached download is available. ' +
+                    'Check that the viewer has been published and that GITHUB_PACKAGES_USER and GITHUB_PACKAGES_TOKEN are set.'
+                )
+            }
+            logger.warn('Could not refresh the viewer from GitHub Packages. Using the last downloaded viewer.')
+            return
+        }
+        if (archives.size() != 1) throw new GradleException('Expected exactly one viewer package ZIP')
+
+        def parent = Files.createDirectories(cache.parentFile.toPath())
+        def temporary = Files.createTempFile(parent, 'viewer-', '.zip')
+        try {
+            Files.copy(archives.first().toPath(), temporary, StandardCopyOption.REPLACE_EXISTING)
+            Files.move(temporary, cache.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } finally {
+            Files.deleteIfExists(temporary)
+        }
+    }
+}
+
+abstract class UnpackViewerPackage extends DefaultTask {
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getArchive()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @Inject
+    abstract ArchiveOperations getArchives()
+
+    @Inject
+    abstract FileSystemOperations getFiles()
+
+    @TaskAction
+    void unpack() {
+        files.sync {
+            into(outputDirectory)
+            into('field-viewer') {
+                from(archives.zipTree(archive.get().asFile))
+            }
+        }
+    }
+}
+
+repositories {
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'viewerPackages'
+                url = uri('https://maven.pkg.github.com/gentoo-37006/visualizer')
+                def user = providers.environmentVariable('GITHUB_PACKAGES_USER').orNull
+                def token = providers.environmentVariable('GITHUB_PACKAGES_TOKEN').orNull
+                if (user && token) {
+                    credentials {
+                        username = user
+                        password = token
+                    }
+                }
+            }
+        }
+        filter { includeModule('io.github.gentoo-37006', 'field-viewer') }
+    }
+}
+
+def viewerArchive = configurations.create('viewerPackage') {
+    canBeConsumed = false
+    canBeResolved = true
+    resolutionStrategy.cacheChangingModulesFor(0, 'seconds')
+}
+dependencies.add(viewerArchive.name, 'io.github.gentoo-37006:field-viewer:rolling-SNAPSHOT@zip')
+
+def cachedViewer = tasks.register('cacheViewerPackage', CacheViewerPackage) {
+    resolvedArchives.from(viewerArchive.incoming.artifactView { lenient = true }.files)
+    cachedArchive.set(rootProject.layout.projectDirectory.file('.gradle/viewer-package/field-viewer.zip'))
+}
+
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    def unpack = tasks.register("unpack${variant.name.capitalize()}ViewerPackage", UnpackViewerPackage) {
+        archive.set(cachedViewer.flatMap { it.cachedArchive })
+    }
+    variant.sources.assets.addGeneratedSourceDirectory(unpack) { it.outputDirectory }
+}

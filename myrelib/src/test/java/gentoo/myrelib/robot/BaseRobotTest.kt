@@ -7,9 +7,10 @@ import gentoo.myrelib.action.Action
 import gentoo.myrelib.action.actionType
 import gentoo.myrelib.component.Component
 import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.field.FieldPoseBridge
+import gentoo.myrelib.field.RobotTelemetryBridge
 import gentoo.myrelib.field.RecordingFiles
 import gentoo.myrelib.hardware.HardwareAccess
+import gentoo.myrelib.opmode.OpMode
 import gentoo.myrelib.recording.MatchRecorder
 import gentoo.myrelib.util.Alliance
 import java.lang.reflect.Proxy
@@ -19,6 +20,13 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
+import com.qualcomm.robotcore.eventloop.opmode.OpMode as FTCOpMode
+
+internal class HardwarelessOpMode : FTCOpMode() {
+    var description = "initial"
+    override fun init() = Unit
+    override fun loop() = Unit
+}
 
 internal class LifecycleComponent : Component() {
     var ticks = 0
@@ -62,11 +70,15 @@ internal object LifecycleRobot : BaseRobot() {
     val last by component(::LifecycleComponent)
     var recordingSetups = 0
     var recordingValue = 0
+    var stateReads = 0
     var lastRecorder: MatchRecorder? = null
     override fun configureRecording(recorder: MatchRecorder) {
         recordingSetups++
         lastRecorder = recorder
-        recorder.addState("cached") { recordingValue }
+        recorder.addState("cached") {
+            stateReads++
+            recordingValue
+        }
     }
     val constructionsAtDeclaration = constructions
     val prematureReadFailure = runCatching { component }.exceptionOrNull()
@@ -76,8 +88,8 @@ internal object LifecycleRobot : BaseRobot() {
         hardware: HardwareAccess = HardwareAccess.empty(),
         config: ComponentConfig = this.config,
         followerFactory: FollowerFactory = this.followerFactory,
-        opModeName: String = "Lifecycle test",
-    ) = init(alliance, hardware, config, followerFactory, opModeName)
+        opMode: FTCOpMode = HardwarelessOpMode(),
+    ) = startOpMode(opMode, alliance, hardware, config, followerFactory)
 }
 
 internal object DuplicateRobot : BaseRobot() {
@@ -187,17 +199,18 @@ class BaseRobotTest {
     }
 
     @Test fun `normal initialization with all components disabled keeps the viewer hardwareless`() {
-        robot.initializeRobot(config = ComponentConfig.disableAll(), opModeName = "Debug Viewer")
-        val snapshot = FieldPoseBridge.snapshot()
+        val opMode = HardwarelessOpMode()
+        robot.initializeRobot(config = ComponentConfig.disableAll(), opMode = opMode)
+        val snapshot = RobotTelemetryBridge.snapshot()
         assertTrue(snapshot.active)
-        assertEquals("Debug Viewer", snapshot.opMode)
+        assertEquals(opMode.javaClass.simpleName, snapshot.opMode)
         assertEquals(robot.WIDTH, snapshot.robot!!.width, 0.0)
         assertNull(snapshot.pose)
         assertTrue(robot.component.disabled)
         assertTrue(robot.actions.disabled)
         assertNull(robot.alliance)
         robot.reset()
-        assertFalse(FieldPoseBridge.snapshot().active)
+        assertFalse(RobotTelemetryBridge.snapshot().active)
     }
 
     @Test fun `opmodes reuse component identity and calibration but refresh measurements`() {
@@ -264,6 +277,39 @@ class BaseRobotTest {
         robot.reset()
         assertTrue(component.disabled)
         assertEquals(releases + 1, component.releases)
+    }
+
+    @Test fun `robot state follows the framework opmode phase until the session ends`() {
+        val opMode = object : OpMode() {
+            override fun initStart() {
+                robot.initializeRobot(config = ComponentConfig.disableAll(), opMode = this)
+            }
+
+            override fun playStart() {
+                assertEquals(State.PLAY, robot.state)
+                robot.start()
+            }
+
+            override fun playStop() {
+                assertEquals(State.PLAY, robot.state)
+            }
+
+            override fun cleanup() = robot.reset()
+        }
+        opMode.hardwareMap = object : HardwareMap(null, null) {
+            override fun <T : Any?> getAll(type: Class<out T>): MutableList<T> = mutableListOf()
+        }
+
+        assertEquals(State.IDLE, robot.state)
+        opMode.init()
+        val session = robot.session
+        assertEquals(State.INIT, robot.state)
+        assertThrows(IllegalStateException::class.java) { robot.start() }
+        opMode.start()
+        assertEquals(State.PLAY, session.state)
+        opMode.stop()
+        assertEquals(State.IDLE, robot.state)
+        assertEquals(State.IDLE, session.state)
     }
 
     @Test fun `reset cancels running queued and reentrant work before the next session`() {
@@ -342,7 +388,7 @@ class BaseRobotTest {
         assertEquals(releases + 1, component.releases)
         assertFalse(robot.isInited)
         assertTrue(component.disabled)
-        assertFalse(FieldPoseBridge.snapshot().active)
+        assertFalse(RobotTelemetryBridge.snapshot().active)
         assertThrows(IllegalStateException::class.java) { robot.alliance }
         component.attachFailure = null
         component.releaseFailure = null
@@ -369,47 +415,57 @@ class BaseRobotTest {
         assertSame(third, second.suppressed.single())
         assertEquals(releases + 1, instance.last.releases)
         assertFalse(robot.isInited)
-        assertFalse(FieldPoseBridge.snapshot().active)
+        assertFalse(RobotTelemetryBridge.snapshot().active)
         robot.reset()
     }
 
     @Test fun `initialization and component loops do not implicitly start recording`() {
         RecordingFiles.attach(temporary.root)
-        val setups = robot.recordingSetups
         for(config in listOf(ComponentConfig.enableAll(), ComponentConfig.disableAll())) {
+            robot.recordingValue = 42
             robot.initializeRobot(config = config)
+            robot.components.tick()
+            assertEquals(42, RobotTelemetryBridge.snapshot().states["cached"])
             robot.recordState(force = true)
             robot.start()
             robot.components.tick()
             robot.recordState(force = true)
             robot.reset()
         }
-        assertEquals(setups, robot.recordingSetups)
         assertTrue(RecordingFiles.list().isEmpty())
     }
 
     @Test fun `opmodes explicitly start and sample recording during INIT or PLAY`() {
         RecordingFiles.attach(temporary.root)
-        val setups = robot.recordingSetups
         val files = mutableSetOf<java.io.File>()
         for((index, config) in listOf(ComponentConfig.enableAll(), ComponentConfig.disableAll()).withIndex()) {
-            robot.initializeRobot(Alliance.RED, config = config, opModeName = "Recording $index")
+            val setups = robot.recordingSetups
+            val opMode = HardwarelessOpMode()
+            robot.initializeRobot(Alliance.RED, config = config, opMode = opMode)
             if(index == 1) robot.start()
             robot.recordingValue = index + 10
             robot.startRecording()
             robot.startRecording() // A duplicate call must not create another writer or reconfigure states.
+            assertEquals(setups + 1, robot.recordingSetups)
+            robot.components.tick() // Live polling alone must not append to disk.
+            val reads = robot.stateReads
             robot.recordState(force = true)
+            assertEquals(reads + 1, robot.stateReads)
+            val live = JsonParser().parse(RobotTelemetryBridge.json()).asJsonObject
             robot.reset()
             robot.lastRecorder!!.awaitClosed()
             val file = (RecordingFiles.list().toSet() - files).single()
             files += file
             val events = file.readLines().map { JsonParser().parse(it).asJsonObject }
             val header = events.first()
-            assertEquals("Recording $index", header["opMode"].asString)
+            assertEquals(opMode.javaClass.simpleName, header["opMode"].asString)
             assertEquals("RED", header["alliance"].asString)
             assertTrue(header["states"].asJsonArray.any { it.asString == "motionPath" })
             val sample = events.single { it["type"].asString == "sample" }
             assertEquals(index + 10, sample["states"].asJsonObject["cached"].asInt)
+            assertEquals(live["states"], sample["states"])
+            assertEquals(live["errors"], sample["errors"])
+            assertEquals(live["phase"], sample["phase"])
             assertEquals(if(index == 0) "INIT" else "PLAY", sample["phase"].asString)
             assertEquals("end", events.last()["type"].asString)
 
@@ -419,7 +475,6 @@ class BaseRobotTest {
             robot.reset()
             assertEquals(files, RecordingFiles.list().toSet())
         }
-        assertEquals(setups + 2, robot.recordingSetups)
     }
 
     @Test fun `recording phases follow lifecycle transitions within the same session`() {
@@ -459,6 +514,25 @@ class BaseRobotTest {
         assertEquals(1, RecordingFiles.list().single().readLines().count {
             JsonParser().parse(it).asJsonObject["type"].asString == "sample"
         })
+    }
+
+    @Test fun `each session owns its current opmode and exposes live opmode data`() {
+        val firstOpMode = HardwarelessOpMode()
+        robot.initializeRobot(opMode = firstOpMode)
+        val firstSession = robot.session
+        assertSame(firstOpMode, firstSession.opMode)
+        robot.start()
+        firstOpMode.description = "running"
+        assertEquals("running", (robot.session.opMode as HardwarelessOpMode).description)
+
+        robot.reset()
+        assertThrows(IllegalStateException::class.java) { robot.session }
+        val nextOpMode = HardwarelessOpMode()
+        robot.initializeRobot(opMode = nextOpMode)
+        assertNotSame(firstSession, robot.session)
+        assertSame(nextOpMode, robot.session.opMode)
+        assertEquals("initial", (robot.session.opMode as HardwarelessOpMode).description)
+        assertEquals(State.IDLE, firstSession.state)
     }
 
     @Test fun `session alliance is replaced at boundaries without changing the robot`() {

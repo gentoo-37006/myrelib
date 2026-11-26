@@ -10,10 +10,11 @@ import gentoo.myrelib.component.Component
 import gentoo.myrelib.component.ComponentRegistry
 import gentoo.myrelib.component.MotionController
 import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.field.FieldPoseBridge
+import gentoo.myrelib.field.RobotTelemetryBridge
 import gentoo.myrelib.field.RecordingFiles
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.math.Pose
+import gentoo.myrelib.opmode.OpMode
 import gentoo.myrelib.recording.MatchRecorder
 import gentoo.myrelib.recording.RecordingConfig
 import gentoo.myrelib.util.Alliance
@@ -22,22 +23,49 @@ import gentoo.myrelib.util.cleanupAll
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 import com.pedropathing.paths.Path as PedroPath
+import com.qualcomm.robotcore.eventloop.opmode.OpMode as FTCOpMode
 
 typealias FollowerFactory = (HardwareMap) -> Follower
 
 enum class State { IDLE, INIT, PLAY }
 
-/** One opmode execution; never owns persistent mechanism state or raw hardware. */
+/** One opmode execution and its FTC context, independent of persistent mechanism state. */
 class RobotSession internal constructor(
+    val opMode: FTCOpMode,
     val alliance: Alliance?,
-    val opModeName: String,
 ) {
-    var state: State = State.INIT
-        internal set
+    val opModeName: String get() = opMode.javaClass.simpleName
+
+    private var started = false
+    private var ended = false
+    private val frameworkOpMode = opMode as? OpMode
+
+    val state: State
+        get() {
+            if(ended) return State.IDLE
+            return when(frameworkOpMode?.phase) {
+                OpMode.Phase.INIT -> State.INIT
+                OpMode.Phase.PLAY -> State.PLAY
+                // Bare FTC iterative opmodes signal PLAY by calling BaseRobot.start().
+                null -> if(started) State.PLAY else State.INIT
+            }
+        }
+
     internal val owner = Thread.currentThread()
 
     internal fun checkThread() {
         check(owner === Thread.currentThread()) { "Robot lifecycle must run on the opmode thread" }
+    }
+
+    internal fun markStarted() {
+        checkThread()
+        check(!started) { "Session has already started" }
+        check(frameworkOpMode?.phase != OpMode.Phase.INIT) { "The opmode has not entered PLAY" }
+        started = true
+    }
+
+    internal fun end() {
+        ended = true
     }
 }
 
@@ -56,12 +84,12 @@ abstract class BaseRobot {
 
     private val definitions = linkedMapOf<String, ComponentDelegate<*>>()
     private var componentsCreated = false
-    private var recorder: MatchRecorder? = null
+    private var telemetry: MatchRecorder? = null
     private var currentSession: RobotSession? = null
     private var resetting = false
     private var attaching = false
     private var startingRecording = false
-    val components = ComponentRegistry()
+    val components = ComponentRegistry { publishState(record = false, force = false) }
     val actions by component(::ActionController)
     val motion by component(::MotionController)
 
@@ -93,7 +121,8 @@ abstract class BaseRobot {
         }
     }
 
-    private fun createComponents() {
+    /** Constructs components once, during the first startOpMode call. */
+    private fun init() {
         if(componentsCreated) return
         definitions.forEach { (name, definition) -> definition.create(name, components) }
         componentsCreated = true
@@ -137,18 +166,24 @@ abstract class BaseRobot {
     abstract val followerFactory: FollowerFactory
 
     protected open val recordingConfig = RecordingConfig()
+
+    /** Registers cached states for the live feed and optional recording at each opmode INIT. */
     protected open fun configureRecording(recorder: MatchRecorder) {}
 
-    /** Samples cached state with the current session's INIT/PLAY phase. */
-    fun recordState(force: Boolean = false) {
-        val activeRecorder = recorder ?: return
+    /** Publishes current state and appends it to an active recording when due. */
+    fun recordState(force: Boolean = false) = publishState(record = true, force = force)
+
+    private fun publishState(record: Boolean, force: Boolean) {
+        val sender = telemetry ?: return
         val active = session
         active.checkThread()
-        activeRecorder.sample(active.state.name, force)
+        sender.emit(active.state.name, force, record) { sample, now ->
+            if(currentSession === active) RobotTelemetryBridge.publish(sample, motion.activePath, now)
+        }
     }
 
     internal fun recordPath(path: gentoo.myrelib.field.FieldPath) {
-        recorder?.recordPath(path)
+        telemetry?.recordPath(path)
     }
 
     /** Opt in for this session from an opmode hook. Repeated calls keep the same recording. */
@@ -156,21 +191,15 @@ abstract class BaseRobot {
         val active = session
         active.checkThread()
         check(!attaching && !resetting && !startingRecording) { "Start recording from an opmode hook" }
-        if(recorder != null || !recordingConfig.enabled) return
+        val sender = checkNotNull(telemetry)
+        if(sender.hasStarted || !recordingConfig.enabled) return
         val file = RecordingFiles.newFile() ?: return
-        val next = MatchRecorder(recordingConfig)
         startingRecording = true
         try {
-            configureRecording(next)
-            next.addState("motionPath") {
-                motion.activePath?.let { mapOf("id" to it.id, "t" to motion.pathT) }
-            }
-            next.start(file, active.opModeName, active.alliance?.name, WIDTH, LENGTH)
-            motion.activePath?.let(next::recordPath)
-            recorder = next
+            sender.start(file, active.opModeName, active.alliance?.name, WIDTH, LENGTH)
+            motion.activePath?.let(sender::recordPath)
         }
         catch(error: Exception) {
-            next.stop()
             RobotLog.ee("MatchRecorder", error, "Could not start match recording")
         }
         finally {
@@ -195,40 +224,41 @@ abstract class BaseRobot {
         singleton = this
     }
 
-    fun init(
-        alliance: Alliance?,
-        hardwareMap: HardwareMap,
-        opModeName: String = "Robot",
-        componentConfig: ComponentConfig = config,
+    /** Attaches this robot to a new opmode session during FTC INIT. */
+    fun startOpMode(
+        opMode: FTCOpMode,
+        alliance: Alliance? = null,
+        config: ComponentConfig = this.config,
     ): RobotSession {
-        check(!resetting && !attaching && !startingRecording) { "Cannot initialize a session from a lifecycle callback" }
+        check(!resetting && !attaching && !startingRecording) { "Cannot start an opmode session from a lifecycle callback" }
         reset()
+        val hardwareMap = opMode.hardwareMap
         PoseRepository.attach(hardwareMap.appContext)
         RecordingFiles.attach(hardwareMap.appContext.filesDir)
-        return init(
+        return startOpMode(
+            opMode,
             alliance,
             HardwareAccess.from(hardwareMap),
-            componentConfig,
+            config,
             followerFactory,
-            opModeName
         )
     }
 
-    /** Specialized initialization seam, also usable with hardwareless sources on the JVM. */
-    protected fun init(
+    /** Specialized opmode attachment seam, also usable with hardwareless sources on the JVM. */
+    protected fun startOpMode(
+        opMode: FTCOpMode,
         alliance: Alliance? = null,
         hardware: HardwareAccess = HardwareAccess.empty(),
-        componentConfig: ComponentConfig = config,
+        config: ComponentConfig = this.config,
         followerFactory: FollowerFactory = this.followerFactory,
-        opModeName: String = "Robot",
     ): RobotSession {
-        check(!resetting && !attaching && !startingRecording) { "Cannot initialize a session from a lifecycle callback" }
+        check(!resetting && !attaching && !startingRecording) { "Cannot start an opmode session from a lifecycle callback" }
         reset()
         return attach(
             hardware,
-            componentConfig,
+            config,
             followerFactory,
-            RobotSession(alliance, opModeName)
+            RobotSession(opMode, alliance)
         )
     }
 
@@ -236,17 +266,24 @@ abstract class BaseRobot {
         hardware: HardwareAccess,
         config: ComponentConfig,
         followerFactory: FollowerFactory,
-        next: RobotSession,
+        newSession: RobotSession,
     ): RobotSession {
         attaching = true
         try {
-            FieldPoseBridge.begin(next.opModeName, WIDTH, LENGTH)
+            RobotTelemetryBridge.begin(newSession.opModeName, WIDTH, LENGTH)
             val snapshot = config.instance()
-            createComponents()
-            currentSession = next
+            init()
+            currentSession = newSession
             motion.prepare(followerFactory)
             components.attach(hardware, snapshot)
-            return next
+            val sender = MatchRecorder(recordingConfig)
+            telemetry = sender
+            configureRecording(sender)
+            sender.addDefaultPose { motion.pose.takeUnless { motion.disabled } }
+            sender.addState("motionPath") {
+                motion.activePath?.let { mapOf("id" to it.id, "t" to motion.pathT) }
+            }
+            return newSession
         }
         catch(failure: Throwable) {
             attaching = false
@@ -256,7 +293,7 @@ abstract class BaseRobot {
             catch(cleanupFailure: Throwable) {
                 if(failure !== cleanupFailure) failure.addSuppressed(cleanupFailure)
             }
-            FieldPoseBridge.stop()
+            RobotTelemetryBridge.stop()
             throw failure
         }
         finally {
@@ -264,11 +301,10 @@ abstract class BaseRobot {
         }
     }
 
+    /** Runs component start hooks at PLAY. For bare FTC opmodes, also signals PLAY. */
     fun start() {
         val active = session
-        active.checkThread()
-        check(active.state == State.INIT) { "Session has already started" }
-        active.state = State.PLAY
+        active.markStarted()
         try {
             components.start()
         }
@@ -299,13 +335,13 @@ abstract class BaseRobot {
         try {
             cleanupAll(
                 { if(active != null) cleanupAll({ actions.removeAll() }, { components.detach() }) },
-                { recorder?.stop() },
-                { FieldPoseBridge.stop() },
+                { telemetry?.stop() },
+                { RobotTelemetryBridge.stop() },
             )
         }
         finally {
-            recorder = null
-            active?.state = State.IDLE
+            telemetry = null
+            active?.end()
             currentSession = null
             resetting = false
         }

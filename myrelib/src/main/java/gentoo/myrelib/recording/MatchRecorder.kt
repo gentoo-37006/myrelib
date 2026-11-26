@@ -7,6 +7,7 @@ import gentoo.myrelib.field.RecordingFiles
 import gentoo.myrelib.field.FieldPath
 import java.io.File
 import java.io.OutputStream
+import java.util.Collections
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -25,7 +26,7 @@ data class RecordingConfig(
     }
 }
 
-/** Suppliers run on the opmode thread; only detached JSON values reach the writer. */
+/** Suppliers run on the opmode thread; only detached JSON values reach readers. */
 class MatchRecorder(
     private val config: RecordingConfig = RecordingConfig(),
     private val clock: () -> Long = System::nanoTime,
@@ -34,6 +35,13 @@ class MatchRecorder(
     private var writer: RecordingWriter? = null
     private var startedAt = 0L
     private var lastSample: Long? = null
+    private var lastPublication: Long? = null
+
+    internal val hasStarted: Boolean get() = writer != null
+
+    internal fun addDefaultPose(read: () -> Pose?) {
+        if("pose" !in states) addState("pose", read)
+    }
 
     fun addState(name: String, read: () -> Any?) {
         check(writer == null) { "Register recording states before starting" }
@@ -56,11 +64,37 @@ class MatchRecorder(
     }
 
     fun sample(phase: String = "RUNNING", force: Boolean = false) {
-        val sink = writer ?: return
-        if (!sink.accepting) return
+        emit(phase, force, record = true)
+    }
+
+    internal fun emit(
+        phase: String,
+        force: Boolean,
+        record: Boolean,
+        publish: ((StateSample, Long) -> Unit)? = null,
+    ) {
         val now = clock()
-        if (!force && lastSample?.let { (now - it) / 1_000_000 < config.intervalMs } == true) return
-        lastSample = now
+        fun due(previous: Long?) =
+            force || previous == null || (now - previous) / 1_000_000 >= config.intervalMs
+
+        val sink = writer?.takeIf { record && it.accepting && due(lastSample) }
+        if(sink == null && (publish == null || !due(lastPublication))) return
+
+        val sample = capture(phase)
+        if(publish != null) {
+            lastPublication = now
+            publish(sample, now)
+        }
+        if(sink != null) {
+            lastSample = now
+            sink.offer(linkedMapOf(
+                "type" to "sample", "timeMs" to (now - startedAt) / 1_000_000.0,
+                "phase" to sample.phase, "states" to sample.states, "errors" to sample.errors,
+            ))
+        }
+    }
+
+    private fun capture(phase: String): StateSample {
         val values = linkedMapOf<String, Any?>()
         val errors = linkedMapOf<String, String>()
         var remainingValues = 4096
@@ -83,8 +117,7 @@ class MatchRecorder(
                 errors[name] = error.javaClass.simpleName
             }
         }
-        sink.offer(linkedMapOf("type" to "sample", "timeMs" to (now - startedAt) / 1_000_000.0,
-            "phase" to phase, "states" to values, "errors" to errors))
+        return StateSample(phase, Collections.unmodifiableMap(values), Collections.unmodifiableMap(errors))
     }
 
     /** Geometry events preserve even paths that start and finish between periodic samples. */
@@ -115,21 +148,27 @@ class MatchRecorder(
             }
             is Enum<*> -> value.name.also { consume(0, it.length) }
             is Pose -> if (value.x.isFinite() && value.y.isFinite() && value.theta.isFinite())
-                mapOf("x" to value.x, "y" to value.y, "heading" to value.theta) else null
+                Collections.unmodifiableMap(mapOf("x" to value.x, "y" to value.y, "heading" to value.theta)) else null
             is Map<*, *> -> {
                 require(value.size <= 256 && value.keys.all { it is String })
-                value.entries.associate {
+                Collections.unmodifiableMap(value.entries.associate {
                     val key = it.key as String
                     consume(0, key.length)
                     key to detach(it.value, depth + 1, consume)
-                }
+                })
             }
             is Iterable<*> -> value.take(257).also { require(it.size <= 256) }
-                .map { detach(it, depth + 1, consume) }
+                .let { items -> Collections.unmodifiableList(items.map { detach(it, depth + 1, consume) }) }
             else -> error("Record scalars, enums, poses, lists, or string-keyed maps")
         }
     }
 }
+
+internal data class StateSample(
+    val phase: String,
+    val states: Map<String, Any?>,
+    val errors: Map<String, String>,
+)
 
 internal class RecordingWriter(
     private val file: File,

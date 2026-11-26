@@ -22,8 +22,9 @@ robot, or configured devices. Results appear in
 ## Included setup
 
 - `robot/Robot.kt`: single robot object, deferred component declarations, and
-  property-based configuration. `initForTest` uses the normal initialization seam
-  with an empty scope or fake hardware; pass `ComponentConfig.disableAll()` to
+  property-based configuration. `startOpModeForTest` uses the normal opmode attachment seam
+  with a lightweight FTC opmode stub and an empty scope or fake hardware; pass
+  `ComponentConfig.disableAll()` to
   disable every component.
 - `component/Claw.kt`: scoped servo access and an enum FSM with public transition
   methods. Its logical state survives opmode transitions. The hold-open action

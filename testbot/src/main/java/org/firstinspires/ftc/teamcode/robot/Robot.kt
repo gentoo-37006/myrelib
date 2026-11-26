@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.robot
 
+import com.qualcomm.robotcore.eventloop.opmode.OpMode
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.config.ComponentConfig
 import gentoo.myrelib.robot.BaseRobot
@@ -26,11 +27,12 @@ object Robot : BaseRobot() {
     val claw by component(::Claw)
 
     /** Exercises full lifecycle and scheduling without an Android app context. */
-    fun initForTest(
+    fun startOpModeForTest(
+        opMode: OpMode,
         alliance: Alliance = Alliance.BLUE,
         hardware: HardwareAccess = HardwareAccess.empty(),
         componentConfig: ComponentConfig = config
     ) {
-        init(alliance, hardware, componentConfig, followerFactory, "Test TeamCode")
+        startOpMode(opMode, alliance, hardware, componentConfig, followerFactory)
     }
 }

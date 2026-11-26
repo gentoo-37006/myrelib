@@ -6,7 +6,8 @@ import gentoo.myrelib.util.cleanupAll
 import com.qualcomm.robotcore.eventloop.opmode.OpMode as FTCOpMode
 
 abstract class OpMode : FTCOpMode() {
-    protected var phase = Phase.INIT
+    var phase = Phase.INIT
+        private set
     private lateinit var hubs: Hubs
 
     internal open fun initStartPre() {

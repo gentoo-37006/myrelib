@@ -5,6 +5,7 @@ import com.pedropathing.math.Vector2D
 import com.pedropathing.paths.curves.Line
 import com.pedropathing.paths.curves.bezier.BezierCurve
 import gentoo.myrelib.math.FieldCoordinateSystem
+import java.util.Collections
 
 /** Detached, bounded field geometry. Never retains a Pedro path or season callback. */
 data class FieldPath(val id: Long, val points: List<Point>, val curves: List<Curve>? = null) {
@@ -28,7 +29,7 @@ data class FieldPath(val id: Long, val points: List<Point>, val curves: List<Cur
                     else -> null
                 }
             }?.takeIf { curves -> curves.all { it != null } }?.filterNotNull()
-            return FieldPath(id, points, curves)
+            return FieldPath(id, Collections.unmodifiableList(points), curves?.let(Collections::unmodifiableList))
         }
     }
 }
