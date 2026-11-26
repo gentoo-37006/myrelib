@@ -35,13 +35,13 @@ def main():
     for line in properties.read_text(encoding="utf-8").splitlines():
         key, separator, value = line.partition("=")
         key = key.strip()
-        if separator and key in ("releaseMajor", "GROUP"):
+        if separator and key in ("myrelib_version", "GROUP"):
             settings[key] = value.strip()
 
-    major = settings["releaseMajor"]
+    major = settings["myrelib_version"]
     group = settings["GROUP"]
     if not re.fullmatch(r"0|[1-9][0-9]*", major):
-        raise ValueError("releaseMajor must be a non-negative integer")
+        raise ValueError("myrelib_version must be a non-negative integer")
 
     versions = published_versions(group, "myrelib") + published_versions(group, "myrelib-processor")
     print(next_version(major, versions))
