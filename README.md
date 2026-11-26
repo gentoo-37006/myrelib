@@ -192,9 +192,17 @@ The Hub viewer source lives in the `visualizer` repository under `src/tracker`.
 Each successful viewer publishing run on `main` updates the rolling ZIP in
 GitHub Packages. Online myrelib builds check that registry for the latest
 published viewer and pack it under `assets/field-viewer/` in the myrelib AAR.
-Set `GITHUB_PACKAGES_USER` to your GitHub username and `GITHUB_PACKAGES_TOKEN`
-to a classic personal access token with `read:packages` and repository access.
-The installed Robot Controller serves the packaged assets locally.
+Gradle reads viewer credentials from an ignored `.env` file at the root of
+myrelib. Use plain `KEY=value` lines without quotes:
+
+```dotenv
+GITHUB_PACKAGES_USER=your-github-username
+GITHUB_PACKAGES_TOKEN=your-classic-personal-access-token
+```
+
+Use a classic personal access token with `read:packages` and repository
+access. Exported variables with the same names take precedence, which works
+for CI. The installed Robot Controller serves the packaged assets locally.
 
 GitHub Packages is the viewer source. An online build checks for a fresh
 snapshot. If Gradle cannot resolve it, myrelib reuses the last downloaded

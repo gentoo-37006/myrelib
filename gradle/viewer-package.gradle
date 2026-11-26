@@ -21,7 +21,7 @@ abstract class CacheViewerPackage extends DefaultTask {
             if (!cache.isFile()) {
                 throw new GradleException(
                     'Could not resolve the viewer from GitHub Packages and no cached download is available. ' +
-                    'Check that the viewer has been published and that GITHUB_PACKAGES_USER and GITHUB_PACKAGES_TOKEN are set.'
+                    'Check that the viewer has been published and that GITHUB_PACKAGES_USER and GITHUB_PACKAGES_TOKEN are set in .env or the environment.'
                 )
             }
             logger.warn('Could not refresh the viewer from GitHub Packages. Using the last downloaded viewer.')
@@ -65,18 +65,23 @@ abstract class UnpackViewerPackage extends DefaultTask {
     }
 }
 
+// Read a local .env as key/value data. Exported values take precedence for CI.
+def viewerEnvironment = new Properties()
+def localEnvironment = rootProject.layout.projectDirectory.file('.env')
+viewerEnvironment.load(new StringReader(providers.fileContents(localEnvironment).asText.orElse('').get()))
+def viewerUser = providers.environmentVariable('GITHUB_PACKAGES_USER').orNull ?: viewerEnvironment.getProperty('GITHUB_PACKAGES_USER')
+def viewerToken = providers.environmentVariable('GITHUB_PACKAGES_TOKEN').orNull ?: viewerEnvironment.getProperty('GITHUB_PACKAGES_TOKEN')
+
 repositories {
     exclusiveContent {
         forRepository {
             maven {
                 name = 'viewerPackages'
                 url = uri('https://maven.pkg.github.com/gentoo-37006/visualizer')
-                def user = providers.environmentVariable('GITHUB_PACKAGES_USER').orNull
-                def token = providers.environmentVariable('GITHUB_PACKAGES_TOKEN').orNull
-                if (user && token) {
+                if (viewerUser && viewerToken) {
                     credentials {
-                        username = user
-                        password = token
+                        username = viewerUser
+                        password = viewerToken
                     }
                 }
             }
