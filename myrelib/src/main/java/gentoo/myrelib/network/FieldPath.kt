@@ -1,10 +1,10 @@
-package gentoo.myrelib.field
+package gentoo.myrelib.network
 
 import com.pedropathing.paths.Path
 import com.pedropathing.math.Vector2D
 import com.pedropathing.paths.curves.Line
 import com.pedropathing.paths.curves.bezier.BezierCurve
-import gentoo.myrelib.math.FieldCoordinateSystem
+import gentoo.myrelib.math.CoordinateSystem
 import java.util.Collections
 
 /** Detached, bounded field geometry. Never retains a Pedro path or season callback. */
@@ -14,8 +14,8 @@ data class FieldPath(val id: Long, val points: List<Point>, val curves: List<Cur
 
     companion object {
         private fun point(value: Vector2D) = Point(
-            value.x() - FieldCoordinateSystem.HALF_FIELD_SIZE,
-            value.y() - FieldCoordinateSystem.HALF_FIELD_SIZE
+            value.x() - CoordinateSystem.HALF_FIELD_SIZE,
+            value.y() - CoordinateSystem.HALF_FIELD_SIZE
         ).also { require(it.x.isFinite() && it.y.isFinite()) }
 
         fun from(path: Path, id: Long): FieldPath {

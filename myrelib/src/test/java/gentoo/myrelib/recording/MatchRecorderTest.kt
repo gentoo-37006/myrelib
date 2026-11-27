@@ -4,7 +4,8 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import gentoo.myrelib.math.Pose
-import gentoo.myrelib.field.RecordingFiles
+import gentoo.myrelib.network.FieldPath
+import gentoo.myrelib.network.RecordingFiles
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -26,12 +27,12 @@ class MatchRecorderTest {
         val file = temporary.newFile()
         recorder.start(file, "Auto", "BLUE", 16.0, 16.0)
         recorder.sample("INIT")
-        val points = mutableListOf(gentoo.myrelib.field.FieldPath.Point(1.0, 2.0))
+        val points = mutableListOf(FieldPath.Point(1.0, 2.0))
         now = 1_000_000
-        recorder.recordPath(gentoo.myrelib.field.FieldPath(1, points))
+        recorder.recordPath(FieldPath(1, points))
         points.clear()
         now = 2_000_000
-        recorder.recordPath(gentoo.myrelib.field.FieldPath(2, listOf(gentoo.myrelib.field.FieldPath.Point(3.0, 4.0))))
+        recorder.recordPath(FieldPath(2, listOf(FieldPath.Point(3.0, 4.0))))
         recorder.stop(); recorder.awaitClosed()
         val paths = records(file).filter { it["type"].asString == "path" }
         assertEquals(2, paths.size)

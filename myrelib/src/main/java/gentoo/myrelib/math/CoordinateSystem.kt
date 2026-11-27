@@ -4,7 +4,7 @@ package gentoo.myrelib.math
  * The fixed FTC field dimensions that define the myrelib/Pedro origin shift.
  * Changing these values changes the coordinate contract, not just robot tuning.
  */
-object FieldCoordinateSystem {
+object CoordinateSystem {
     /** inches */
     const val FIELD_SIZE: Double = 144.0
 

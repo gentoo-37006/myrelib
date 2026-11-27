@@ -1,4 +1,4 @@
-package gentoo.myrelib.field
+package gentoo.myrelib.network
 
 import java.io.File
 import org.junit.Assert.*

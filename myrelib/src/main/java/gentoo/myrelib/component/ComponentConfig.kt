@@ -1,4 +1,4 @@
-package gentoo.myrelib.config
+package gentoo.myrelib.component
 
 import kotlin.reflect.KProperty
 

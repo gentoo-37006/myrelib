@@ -7,7 +7,7 @@ import gentoo.myrelib.util.Alliance
 import org.firstinspires.ftc.teamcode.robot.Robot
 
 @Auton
-abstract class TestAuton(protected val alliance: Alliance) : RobotOpMode(alliance, Robot) {
+abstract class TestAuton(final override val alliance: Alliance) : RobotOpMode(alliance, Robot) {
     private lateinit var sequence: AutonSequence
     protected abstract fun buildSequence(): AutonSequence
 

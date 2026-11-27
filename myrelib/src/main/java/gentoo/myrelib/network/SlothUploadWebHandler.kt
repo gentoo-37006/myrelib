@@ -1,4 +1,4 @@
-package gentoo.myrelib.deploy
+package gentoo.myrelib.network
 
 import android.content.Context
 import com.google.gson.Gson

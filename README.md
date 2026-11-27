@@ -215,13 +215,16 @@ and expire permanently at detach. Raw hardware-map access for integrations such
 as Pedro is an explicit escape hatch; release those references at detach.
 
 Extend `RobotOpMode(alliance, Robot)` and override `initStart`, `initTick`,
-`playStart`, `playTick`, and `playStop`. It owns per-run `inputs`, refreshes bulk
-caches before attachment/loops, ticks the scheduler and components once per
-loop, and always attempts cleanup. Do not tick components or the
-action controller again in these hooks. Bare FTC opmodes must call
-`Robot.startOpMode(this, alliance = ...)`, `Robot.start()`, and `Robot.reset()` themselves and manage
-inputs/bulk caching. Persistence ends when the robot singleton is replaced or
-the app restarts; physical references also depend on the underlying sensors.
+`playStart`, `playTick`, and `playStop`. It refreshes bulk caches before
+attachment/loops, ticks the scheduler and components once per loop, and always
+attempts cleanup. Extend `Teleop(alliance)` and bind controls in
+`driverBindings(gamepad)` and `operatorBindings(gamepad)` during INIT. Teleop
+polls the per-run bindings before the component tick during PLAY.
+Leave scheduling and component ticks to the framework. Bare FTC opmodes must
+call `Robot.startOpMode(this, alliance = ...)`, `Robot.start()`, and
+`Robot.reset()` themselves and manage inputs and bulk caching. Persistence ends
+when the robot singleton is replaced or the app restarts. Physical references
+also depend on the underlying sensors.
 
 ## Initialization and recording
 

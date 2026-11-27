@@ -9,7 +9,7 @@ import com.pedropathing.utils.Angle
 import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.robot.BaseRobot
-import gentoo.myrelib.field.FieldPath
+import gentoo.myrelib.network.FieldPath
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.math.toPedro
 import gentoo.myrelib.math.toPose

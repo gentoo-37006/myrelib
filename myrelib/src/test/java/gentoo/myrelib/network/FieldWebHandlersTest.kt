@@ -1,4 +1,4 @@
-package gentoo.myrelib.field
+package gentoo.myrelib.network
 
 import com.google.gson.JsonParser
 import fi.iki.elonen.NanoHTTPD

@@ -1,6 +1,5 @@
 package gentoo.myrelib.component
 
-import gentoo.myrelib.config.ComponentConfig
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.util.cleanupAll
 

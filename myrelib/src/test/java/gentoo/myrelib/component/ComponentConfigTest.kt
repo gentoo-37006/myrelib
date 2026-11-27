@@ -1,6 +1,5 @@
 package gentoo.myrelib.component
 
-import gentoo.myrelib.config.ComponentConfig
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

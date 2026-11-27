@@ -9,11 +9,12 @@ import gentoo.myrelib.component.ActionController
 import gentoo.myrelib.component.Component
 import gentoo.myrelib.component.ComponentRegistry
 import gentoo.myrelib.component.MotionController
-import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.field.RobotTelemetryBridge
-import gentoo.myrelib.field.RecordingFiles
+import gentoo.myrelib.component.ComponentConfig
+import gentoo.myrelib.network.RobotTelemetryBridge
+import gentoo.myrelib.network.RecordingFiles
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.math.Pose
+import gentoo.myrelib.network.FieldPath
 import gentoo.myrelib.opmode.OpMode
 import gentoo.myrelib.recording.MatchRecorder
 import gentoo.myrelib.recording.RecordingConfig
@@ -182,7 +183,7 @@ abstract class BaseRobot {
         }
     }
 
-    internal fun recordPath(path: gentoo.myrelib.field.FieldPath) {
+    internal fun recordPath(path: FieldPath) {
         telemetry?.recordPath(path)
     }
 

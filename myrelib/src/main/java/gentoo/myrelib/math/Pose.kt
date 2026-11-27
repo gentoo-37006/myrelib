@@ -1,6 +1,6 @@
 package gentoo.myrelib.math
 
-import gentoo.myrelib.math.FieldCoordinateSystem.HALF_FIELD_SIZE
+import gentoo.myrelib.math.CoordinateSystem.HALF_FIELD_SIZE
 import gentoo.myrelib.math.Pose.Companion.startPose
 import gentoo.myrelib.robot.BaseRobot
 import java.lang.Math.toRadians

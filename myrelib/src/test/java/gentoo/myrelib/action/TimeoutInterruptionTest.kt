@@ -9,6 +9,7 @@ import com.pedropathing.localization.MotionState
 import com.pedropathing.math.Pose as PedroPose
 import com.pedropathing.math.Vector2D
 import com.pedropathing.paths.PathTracker
+import gentoo.myrelib.component.ComponentConfig
 import gentoo.myrelib.hardware.testHardwareScope
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.pathing.AutonSequence
@@ -60,7 +61,7 @@ class TimeoutInterruptionTest {
         val follower = Follower(LocalizerStub(), DriveStub(), AlgorithmStub())
         robot.initializeRobot(
             hardware = testHardwareScope(), followerFactory = { follower },
-            config = object : gentoo.myrelib.config.ComponentConfig() {
+            config = object : ComponentConfig() {
                 override fun componentBindings() = bind(
                     LifecycleRobot::component to true, LifecycleRobot::last to true,
                 )

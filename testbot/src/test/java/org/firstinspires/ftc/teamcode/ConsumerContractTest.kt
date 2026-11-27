@@ -1,27 +1,37 @@
 package org.firstinspires.ftc.teamcode
 
+import android.content.ContextWrapper
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous
 import com.qualcomm.robotcore.eventloop.opmode.OpMode
+import com.qualcomm.robotcore.hardware.Gamepad
 import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.hardware.HardwareAccess
-import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.input.InputBindings
+import gentoo.myrelib.component.ComponentConfig
+import gentoo.myrelib.input.GamepadTriggers
 import gentoo.myrelib.math.Pose
+import gentoo.myrelib.opmode.Teleop
 import gentoo.myrelib.util.Alliance
 import org.firstinspires.ftc.teamcode.action.ClawActions
 import org.firstinspires.ftc.teamcode.component.Claw
-import org.firstinspires.ftc.teamcode.opmode.generated.Blue_SmokeAuton
-import org.firstinspires.ftc.teamcode.opmode.generated.Red_SmokeAuton
+import org.firstinspires.ftc.teamcode.opmode.routines.Blue_FrameworkSmokeAuton
+import org.firstinspires.ftc.teamcode.opmode.routines.Blue_SmokeAuton
+import org.firstinspires.ftc.teamcode.opmode.routines.FrameworkSmokeAuton
+import org.firstinspires.ftc.teamcode.opmode.routines.Red_FrameworkSmokeAuton
+import org.firstinspires.ftc.teamcode.opmode.routines.Red_SmokeAuton
 import org.firstinspires.ftc.teamcode.opmode.routines.SmokeAuton
 import org.firstinspires.ftc.teamcode.opmode.routines.smokeSequence
 import org.firstinspires.ftc.teamcode.robot.Robot
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /** Uses only the public library API, compiled from a separate consuming module. */
 class ConsumerContractTest {
+    @get:Rule val files = TemporaryFolder()
+
     private fun initializeRobot(
         alliance: Alliance = Alliance.BLUE,
         hardware: HardwareAccess = HardwareAccess.empty(),
@@ -44,31 +54,79 @@ class ConsumerContractTest {
 
     @After fun cleanup() = Robot.reset()
 
-    @Test
-    fun `input edges schedule and cancel a consumer action through the component loop`() {
-        val hardware = FakeHardware()
-        initializeRobot(hardware = hardware.access)
-        var pressed = false
-        val inputs = InputBindings()
-        inputs.trigger { pressed }.onChange(ClawActions.HOLD_OPEN)
+    private fun appContext() = object : ContextWrapper(null) {
+        override fun getApplicationContext() = this
+        override fun getFilesDir() = files.root
+    }
 
-        pressed = true
-        inputs.poll()
-        Robot.components.tick()
+    @Test
+    fun `teleop inputs drive the component loop and clear on stop`() {
+        val hardware = FakeHardware(appContext())
+        var operatorPresses = 0
+        val opMode = object : Teleop(Alliance.BLUE) {
+            override fun driverBindings(gamepad: GamepadTriggers) {
+                gamepad.a.onChange(ClawActions.HOLD_OPEN)
+            }
+
+            override fun operatorBindings(gamepad: GamepadTriggers) {
+                gamepad.b.onTrue { operatorPresses++ }
+            }
+
+            fun pollInputs() = inputs.poll()
+        }
+        opMode.hardwareMap = hardware.map
+        opMode.gamepad1 = Gamepad()
+        opMode.gamepad2 = Gamepad()
+        opMode.init()
+        assertSame(opMode, Robot.session.opMode)
+
+        opMode.gamepad1.a = true
+        opMode.init_loop()
+        assertEquals(Claw.State.CLOSED, Robot.claw.state)
+
+        opMode.start()
+        opMode.gamepad2.b = true
+        opMode.loop()
         assertEquals(Claw.State.OPEN, Robot.claw.state)
-        assertEquals(listOf(Claw.OPEN_POSITION), hardware.positions)
+        assertEquals(Claw.OPEN_POSITION, hardware.positions.last(), 0.0)
+        assertEquals(1, operatorPresses)
         val first = Robot.runningActions.getValue(ClawActions.HOLD_OPEN)
 
-        pressed = false
-        inputs.poll()
-        Robot.components.tick()
+        opMode.gamepad1.a = false
+        opMode.gamepad2.b = false
+        opMode.loop()
         assertEquals(Claw.State.CLOSED, Robot.claw.state)
         assertEquals(Claw.CLOSED_POSITION, hardware.positions.last(), 0.0)
         assertTrue(Robot.runningActions.isEmpty())
 
-        pressed = true
-        inputs.poll()
+        opMode.gamepad1.a = true
+        opMode.loop()
         assertNotSame(first, Robot.runningActions.getValue(ClawActions.HOLD_OPEN))
+
+        opMode.stop()
+        opMode.gamepad2.b = true
+        opMode.pollInputs()
+        assertEquals(1, operatorPresses)
+        assertFalse(Robot.isInited)
+        assertEquals(Claw.State.CLOSED, Robot.claw.state)
+    }
+
+    @Test
+    fun `teleop cleanup preserves an attachment failure before inputs exist`() {
+        val failure = IllegalStateException("Test hardware lookup failed")
+        val opMode = object : Teleop(Alliance.BLUE) {
+            override fun driverBindings(gamepad: GamepadTriggers) = Unit
+            override fun operatorBindings(gamepad: GamepadTriggers) = Unit
+        }
+        opMode.hardwareMap = object : HardwareMap(appContext(), null) {
+            override fun <T : Any?> getAll(type: Class<out T>): MutableList<T> = mutableListOf()
+            override fun <T : Any?> get(type: Class<out T>, deviceName: String): T = throw failure
+        }
+
+        assertSame(failure, assertThrows(IllegalStateException::class.java) { opMode.init() })
+        assertTrue(failure.suppressed.isEmpty())
+        assertFalse(Robot.isInited)
+        opMode.stop()
     }
 
     @Test
@@ -184,20 +242,30 @@ class ConsumerContractTest {
     }
 
     @Test
-    fun `real KSP consumer generates only direct subclass wrappers in the base package`() {
-        val wrappers = listOf(Blue_SmokeAuton::class.java, Red_SmokeAuton::class.java)
-        for((wrapper, group) in wrappers.zip(listOf("Blue", "Red"))) {
-            assertEquals(SmokeAuton::class.java, wrapper.superclass)
-            assertNotNull(wrapper.getDeclaredConstructor())
-            val annotation = requireNotNull(wrapper.getAnnotation(Autonomous::class.java))
-            assertEquals(group, annotation.group)
-            assertEquals(group, annotation.preselectTeleOp)
+    fun `real KSP consumer generates only direct subclass wrappers in the subclass package`() {
+        val autons = mapOf(
+            SmokeAuton::class.java to listOf(Blue_SmokeAuton::class.java, Red_SmokeAuton::class.java),
+            FrameworkSmokeAuton::class.java to listOf(Blue_FrameworkSmokeAuton::class.java, Red_FrameworkSmokeAuton::class.java),
+        )
+        for((auton, wrappers) in autons) {
+            for((wrapper, group) in wrappers.zip(listOf("Blue", "Red"))) {
+                assertEquals(auton, wrapper.superclass)
+                assertEquals(auton.packageName, wrapper.packageName)
+                assertNotNull(wrapper.getDeclaredConstructor())
+                val annotation = requireNotNull(wrapper.getAnnotation(Autonomous::class.java))
+                assertEquals(group, annotation.group)
+                assertEquals(group, annotation.preselectTeleOp)
+            }
         }
 
         for(prefix in listOf("Blue", "Red")) {
-            for(name in listOf("TestAuton", "IndirectSmokeAuton")) {
+            for(name in listOf(
+                "gentoo.myrelib.opmode.${prefix}_Auton",
+                "org.firstinspires.ftc.teamcode.opmode.${prefix}_TestAuton",
+                "org.firstinspires.ftc.teamcode.opmode.routines.${prefix}_IndirectSmokeAuton",
+            )) {
                 assertThrows(ClassNotFoundException::class.java) {
-                    Class.forName("org.firstinspires.ftc.teamcode.opmode.generated.${prefix}_$name")
+                    Class.forName(name)
                 }
             }
         }

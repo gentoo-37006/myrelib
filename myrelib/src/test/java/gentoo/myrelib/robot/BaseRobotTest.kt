@@ -6,9 +6,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap
 import gentoo.myrelib.action.Action
 import gentoo.myrelib.action.actionType
 import gentoo.myrelib.component.Component
-import gentoo.myrelib.config.ComponentConfig
-import gentoo.myrelib.field.RobotTelemetryBridge
-import gentoo.myrelib.field.RecordingFiles
+import gentoo.myrelib.component.ComponentConfig
+import gentoo.myrelib.network.RobotTelemetryBridge
+import gentoo.myrelib.network.RecordingFiles
 import gentoo.myrelib.hardware.HardwareAccess
 import gentoo.myrelib.opmode.OpMode
 import gentoo.myrelib.recording.MatchRecorder
@@ -128,7 +128,7 @@ class BaseRobotTest {
         assertEquals(0, robot.constructionsAtDeclaration)
         assertTrue(robot.prematureReadFailure is IllegalStateException)
         assertTrue(robot.prematureReadFailure!!.message!!.contains("first opmode INIT"))
-        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        robot.initializeRobot(config = ComponentConfig.disableAll())
         val component = robot.component
         val registryComponent = robot.components["component"]
         assertSame(component, registryComponent)
@@ -224,7 +224,7 @@ class BaseRobotTest {
         val hardware = HardwareAccess.from(object : HardwareMap(null, null) {
             override fun <T : Any?> get(classOrInterface: Class<out T>, deviceName: String): T = classOrInterface.cast(motor)!!
         })
-        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        robot.initializeRobot(config = ComponentConfig.disableAll())
         val original = robot.component
         original.calibrationOffset = 100
         val initializations = original.initializations
@@ -374,7 +374,7 @@ class BaseRobotTest {
     }
 
     @Test fun `failed INIT rolls back attached components and permits another session`() {
-        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll())
+        robot.initializeRobot(config = ComponentConfig.disableAll())
         val component = robot.component
         val attachFailure = IllegalStateException("attachment failed")
         val cleanupFailure = IllegalArgumentException("detach failed")

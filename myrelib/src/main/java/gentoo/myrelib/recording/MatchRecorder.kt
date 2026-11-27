@@ -3,8 +3,8 @@ package gentoo.myrelib.recording
 import com.google.gson.GsonBuilder
 import com.qualcomm.robotcore.util.RobotLog
 import gentoo.myrelib.math.Pose
-import gentoo.myrelib.field.RecordingFiles
-import gentoo.myrelib.field.FieldPath
+import gentoo.myrelib.network.RecordingFiles
+import gentoo.myrelib.network.FieldPath
 import java.io.File
 import java.io.OutputStream
 import java.util.Collections

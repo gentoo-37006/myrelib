@@ -59,9 +59,13 @@ abstract class OpMode : FTCOpMode() {
     internal open fun cleanup() {}
 
     private inline fun lifecycle(block: () -> Unit) {
-        try { block() }
+        try {
+            block()
+        }
         catch(failure: Throwable) {
-            try { cleanup() }
+            try {
+                cleanup()
+            }
             catch(cleanupFailure: Throwable) {
                 if(failure !== cleanupFailure) failure.addSuppressed(cleanupFailure)
             }

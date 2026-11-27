@@ -82,9 +82,11 @@ attached components, including disabled ones. Attempt every cleanup and preserve
 later failures as suppressed. Partial attachment failure rolls back acquired
 resources and allows retry with the same component objects.
 
-`RobotOpMode` owns per-opmode input bindings, ticks components once per loop,
-clears bulk caches before attachment/loops, and guarantees cleanup after user
-hook failures. Consumers override the public lifecycle hooks, not FTC methods.
+`RobotOpMode` ticks components once per loop, clears bulk caches before
+attachment/loops, and guarantees cleanup after user hook failures. `Teleop`
+owns per-opmode inputs, configures them through `driverBindings` and
+`operatorBindings` during INIT, and polls them before the component tick at PLAY.
+Consumers override the public lifecycle hooks, not FTC methods.
 Bare FTC opmodes must call startOpMode/start/reset and manage inputs/caches
 themselves.
 There is no background hardware polling between opmodes; movement while idle is
@@ -141,8 +143,9 @@ Fail when there is no cached archive.
 Keep the built viewer out of the repository.
 
 `@Auton` marks a base class. The processor generates blue/red FTC wrappers only
-for its direct subclasses, in the annotated base's `.generated` package. Base
-and indirect subclasses do not generate wrappers. The processor must not depend
+for its direct subclasses, in each subclass's own package. The annotated base
+can come from a dependency, including myrelib's `opmode.Auton`. Base and indirect
+subclasses do not generate wrappers. The processor must not depend
 on a season project. Derive qualified names and alliance constants from class
 references when building the processor so its JVM runtime can run without
 Android AARs on its classpath.

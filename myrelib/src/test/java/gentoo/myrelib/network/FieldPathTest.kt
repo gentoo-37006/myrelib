@@ -1,4 +1,4 @@
-package gentoo.myrelib.field
+package gentoo.myrelib.network
 
 import gentoo.myrelib.math.Pose
 import gentoo.myrelib.pathing.Linear

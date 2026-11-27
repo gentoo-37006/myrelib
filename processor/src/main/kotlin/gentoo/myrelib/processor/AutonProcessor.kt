@@ -34,31 +34,24 @@ private class AutonProcessor(
 
         declarations.asSequence()
             .filter(KSAnnotated::validate)
-            .mapNotNull { declaration ->
-                declaration.directAnnotatedAutonBase()?.let { declaration to it }
-            }
-            .forEach { (declaration, baseClass) -> generateWrappers(declaration, baseClass) }
+            .filter { it.hasDirectAnnotatedAutonBase() }
+            .forEach(::generateWrappers)
 
         return deferred
     }
 
-    private fun KSClassDeclaration.directAnnotatedAutonBase(): KSClassDeclaration? =
-        superTypes.mapNotNull { type ->
+    private fun KSClassDeclaration.hasDirectAnnotatedAutonBase(): Boolean =
+        superTypes.any { type ->
             val directSupertype = type.resolve().declaration as? KSClassDeclaration
-                ?: return@mapNotNull null
-            directSupertype.takeIf { candidate ->
-                candidate.classKind == ClassKind.CLASS &&
-                    candidate.annotations.any { it.isAutonAnnotation() }
-            }
-        }.firstOrNull()
+                ?: return@any false
+            directSupertype.classKind == ClassKind.CLASS &&
+                directSupertype.annotations.any { it.isAutonAnnotation() }
+        }
 
     private fun KSAnnotation.isAutonAnnotation(): Boolean =
         annotationType.resolve().declaration.qualifiedName?.asString() == AUTON_ANNOTATION
 
-    private fun generateWrappers(
-        declaration: KSClassDeclaration,
-        baseClass: KSClassDeclaration
-    ) {
+    private fun generateWrappers(declaration: KSClassDeclaration) {
         val qualifiedName = declaration.qualifiedName?.asString()
         val containingFile = declaration.containingFile
         if(qualifiedName == null || containingFile == null) {
@@ -98,13 +91,13 @@ private class AutonProcessor(
             return
         }
 
-        val basePackage = baseClass.packageName.asString()
-        val generatedPackage = if(basePackage.isEmpty()) "generated" else "$basePackage.generated"
+        val generatedPackage = declaration.packageName.asString()
         val baseName = declaration.simpleName.asString()
         ALLIANCE_NAMES.forEach { enumName ->
             val displayName = enumName.lowercase().replaceFirstChar(Char::uppercase)
             val generatedName = "${displayName}_$baseName"
-            val generatedQualifiedName = "$generatedPackage.$generatedName"
+            val generatedQualifiedName = if(generatedPackage.isEmpty()) generatedName
+                else "$generatedPackage.$generatedName"
             val previousDeclaration = generatedClasses.putIfAbsent(generatedQualifiedName, qualifiedName)
             if(previousDeclaration != null && previousDeclaration != qualifiedName) {
                 logger.error(
@@ -120,8 +113,10 @@ private class AutonProcessor(
                 packageName = generatedPackage,
                 fileName = generatedName
             ).bufferedWriter().use { writer ->
-                writer.appendLine("package $generatedPackage")
-                writer.appendLine()
+                if(generatedPackage.isNotEmpty()) {
+                    writer.appendLine("package $generatedPackage")
+                    writer.appendLine()
+                }
                 writer.appendLine(
                     "@$FTC_AUTONOMOUS_ANNOTATION(" +
                         "group = \"$displayName\", preselectTeleOp = \"$displayName\")"

@@ -1,4 +1,4 @@
-package gentoo.myrelib.field
+package gentoo.myrelib.network
 
 import android.content.Context
 import com.qualcomm.robotcore.util.WebHandlerManager

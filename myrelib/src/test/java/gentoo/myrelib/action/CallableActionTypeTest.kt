@@ -1,5 +1,6 @@
 package gentoo.myrelib.action
 
+import gentoo.myrelib.component.ComponentConfig
 import gentoo.myrelib.robot.LifecycleRobot
 import org.junit.After
 import org.junit.Assert.*
@@ -120,7 +121,7 @@ class CallableActionTypeTest {
         assertEquals(1, built); assertFalse(shoot.isRunning())
         shoot(0.8).submit(); robot.removeAllActions()
         assertEquals(2, built); assertFalse(shoot.isRunning())
-        robot.initializeRobot(config = gentoo.myrelib.config.ComponentConfig.disableAll()); shoot(0.8).submit()
+        robot.initializeRobot(config = ComponentConfig.disableAll()); shoot(0.8).submit()
         assertEquals(2, built)
     }
 

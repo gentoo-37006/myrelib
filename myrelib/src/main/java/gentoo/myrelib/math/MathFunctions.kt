@@ -9,16 +9,16 @@ import com.pedropathing.math.Pose as PedroPose
 
 fun PedroPose.toPose(): Pose {
     return Pose(
-        x() - FieldCoordinateSystem.HALF_FIELD_SIZE,
-        y() - FieldCoordinateSystem.HALF_FIELD_SIZE,
+        x() - CoordinateSystem.HALF_FIELD_SIZE,
+        y() - CoordinateSystem.HALF_FIELD_SIZE,
         heading().toPose()
     )
 }
 
 fun Pose.toPedro(): PedroPose {
     return PedroPose(
-        x + FieldCoordinateSystem.HALF_FIELD_SIZE,
-        y + FieldCoordinateSystem.HALF_FIELD_SIZE,
+        x + CoordinateSystem.HALF_FIELD_SIZE,
+        y + CoordinateSystem.HALF_FIELD_SIZE,
         theta.toPedro()
     )
 }

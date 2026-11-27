@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.robot
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode
 import gentoo.myrelib.hardware.HardwareAccess
-import gentoo.myrelib.config.ComponentConfig
+import gentoo.myrelib.component.ComponentConfig
 import gentoo.myrelib.robot.BaseRobot
 import gentoo.myrelib.robot.FollowerFactory
 import gentoo.myrelib.util.Alliance
