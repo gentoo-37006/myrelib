@@ -43,12 +43,13 @@ jobs:
         run: |
           ./gradlew -PverifyPublication -PsignPublication :myrelib:testDebugUnitTest \
             :myrelib:publishAllPublicationsToVerificationRepository \
-            :processor:publishAllPublicationsToVerificationRepository
+            :processor:publishAllPublicationsToVerificationRepository \
+            :yb:validatePlugins :yb:publishAllPublicationsToVerificationRepository
 
       - name: Build the sandbox against the staged artifacts
         run: ./gradlew -PverifyPublication :testbot:testDebugUnitTest :testbot:assembleRelease
 
-      - name: Publish both artifacts to Maven Central
+      - name: Publish the artifacts to Maven Central
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}

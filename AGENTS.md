@@ -1,8 +1,8 @@
 # myrelib
 
 This is the standalone reusable framework repository. It contains the Android
-`:myrelib` library, sibling JVM `:processor` KSP module, and Android library
-`:testbot` consumer sandbox. Keep sample robots and opmodes in
+`:myrelib` library, JVM `:processor` KSP module, `:yb` Gradle tooling module,
+and Android library `:testbot` consumer sandbox. Keep sample robots and opmodes in
 `:testbot` only. Do not add real season code, an RC app, or dependencies
 on an external consuming robot project. The library and processor must never
 depend on the sandbox.
@@ -17,6 +17,7 @@ Commands:
 ./gradlew :myrelib:testDebugUnitTest
 ./gradlew :myrelib:assembleRelease :processor:jar
 ./gradlew :testbot:testDebugUnitTest :testbot:assembleRelease
+python3 -B -m unittest discover -s yb/src/test/python
 ```
 
 FTC SDK, Pedro, and KSP API versions live in root `gradle.properties`. Use those
@@ -28,12 +29,12 @@ desktop tests runnable without a Robot Controller. Its motion component stays
 disabled until a real follower factory is supplied; path tests check authoring
 and scheduling, not simulated drivetrain motion.
 
-Publish the Android AAR and KSP JAR at the same version through the manual
-Maven Central workflow. `releaseMajor` sets the major. The workflow starts each
+Publish the Android AAR, KSP JAR, and `myrelib-yb` Gradle plugin at the same
+version through the manual Maven Central workflow. The workflow starts each
 new major at minor `0` and increments the minor from Maven Central's published
 versions. Consumers can use a major-version selector such as `0.+`.
-The workflow uses `-PverifyPublication` to stage both artifacts in a local Maven
-repository and run the sandbox against them before publishing.
+The workflow uses `-PverifyPublication` to stage artifacts in a local Maven
+repository and run the sandbox against the library and processor before publishing.
 
 Keep this file synchronized with framework architecture and extension contracts.
 Test stable, general behaviors and shared contracts: scheduling, lifecycle,
@@ -125,6 +126,12 @@ handlers, immutable feed bridge, recording file
 manager, and assets live in this library. Do not retain robot objects, Pedro
 paths, or callbacks in app-lifetime bridges. Do not put this library in Sloth's
 replacement packages; framework or asset changes need a full consumer APK push.
+The optional `/yb/sloth` receiver is separate from the viewer. Enable it only
+when Sloth is on the runtime classpath and YB has paired a key in the app's
+private files over ADB. Require a fresh signed challenge for every upload.
+YB Full Push uses the Control Hub's built-in HTTP updater when available.
+ADB fallback is allowed before an HTTP upload starts. Cancel updater prompts
+and use in-place ADB installs so Full Push never uninstalls the app.
 The viewer source is in the `visualizer` repository under `src/tracker`.
 The manual visualizer workflow publishes numbered ZIP releases to Maven Central
 as `io.github.gentoo-37006:visualizer`. Online Gradle builds check for the latest

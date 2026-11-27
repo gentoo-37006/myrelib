@@ -43,7 +43,11 @@ def main():
     if not re.fullmatch(r"0|[1-9][0-9]*", major):
         raise ValueError("myrelib_version must be a non-negative integer")
 
-    versions = published_versions(group, "myrelib") + published_versions(group, "myrelib-processor")
+    versions = [
+        version
+        for artifact in ("myrelib", "myrelib-processor", "myrelib-yb")
+        for version in published_versions(group, artifact)
+    ]
     print(next_version(major, versions))
 
 

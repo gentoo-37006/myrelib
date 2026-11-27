@@ -1,0 +1,49 @@
+import com.vanniktech.maven.publish.JavaLibrary
+
+plugins {
+    id 'java-gradle-plugin'
+    id 'com.vanniktech.maven.publish'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+gradlePlugin {
+    automatedPublishing = false
+    plugins {
+        yb {
+            id = 'io.github.gentoo-37006.myrelib.yb'
+            implementationClass = 'gentoo.myrelib.yb.YbPlugin'
+        }
+    }
+}
+
+sourceSets {
+    launcher
+}
+
+// Embed the standalone launcher so IDE runs need neither Gradle nor an IDE plugin.
+def launcherJar = tasks.register('launcherJar', Jar) {
+    archiveClassifier = 'launcher'
+    from(sourceSets.launcher.output)
+    manifest.attributes('Main-Class': 'gentoo.myrelib.yb.YbLauncher')
+}
+
+tasks.named('processResources') {
+    from(launcherJar) { rename { 'yb-launcher.jar' } }
+}
+
+mavenPublishing {
+    coordinates(project.group.toString(), 'myrelib-yb', project.version.toString())
+    configure(new JavaLibrary())
+    pom {
+        name = 'myrelib YB tools'
+        description = 'Generates Android Studio run configurations for FTC Sloth and full pushes.'
+    }
+}
+
+tasks.named('sourcesJar') {
+    from(sourceSets.launcher.allSource)
+}

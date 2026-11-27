@@ -48,6 +48,37 @@ selector to opt into a new major, or use the same exact version for both
 dependencies to pin a build. Gradle caches dynamic versions for 24 hours by
 default. Use `--refresh-dependencies` to check for a new release immediately.
 
+## YB run configurations
+
+Projects using Sloth can add the YB plugin to their root `build.gradle`.
+After the plugin is available on Maven Central, add `mavenCentral()` to
+`buildscript.repositories`, add the classpath dependency to
+`buildscript.dependencies`, and apply the plugin after the `plugins` block.
+
+```groovy
+buildscript {
+    repositories { mavenCentral() }
+    dependencies { classpath 'io.github.gentoo-37006:myrelib-yb:4.+' }
+}
+
+apply plugin: 'io.github.gentoo-37006.myrelib.yb'
+```
+
+Open the project in Android Studio or sync it with Gradle. The plugin creates
+local **Sloth Push** and **Full Push** configurations when Gradle loads the
+project. Each runs the packaged YB script with Python 3. The **yb → genYbRuns**
+task is also available in the Gradle panel for regenerating the local files.
+
+YB reuses its existing Wi-Fi configuration. On a new computer, configure it
+once from the project root with
+`java -jar .gradle/myrelib/yb.jar config --ssid <SSID> --password <PASSWORD>`.
+
+**Full Push** tries the Control Hub's built-in HTTP updater over Wi-Fi. It falls
+back to ADB if the updater is unavailable before uploading. Both paths require
+the installed app's signing key and leave the existing app installed if the
+signatures conflict. Use `push full --adb` to force ADB and pair this computer
+for Sloth HTTP hot loads, or `push full --usb` to push over a cable.
+
 ## Publish a release
 
 1. Verify the `GROUP` namespace from `gradle.properties` in the [Central Portal](https://central.sonatype.com/).
@@ -68,9 +99,9 @@ default. Use `--refresh-dependencies` to check for a new release immediately.
 3. Publish `io.github.gentoo-37006:visualizer` to Maven Central first. Once
    the myrelib workflow is in the default branch, open **Actions → Publish
    myrelib to Maven Central → Run workflow**. Select the branch to publish.
-   The workflow stages both packages locally, builds and tests `testbot`
-   against them, and sends one signed deployment named `myrelib-<version>` to
-   Maven Central.
+   The workflow stages the library, processor, and YB plugin locally, builds
+   and tests `testbot` against the library and processor, and sends one signed
+   deployment named `myrelib-<version>` to Maven Central.
 
 `releaseMajor` in `gradle.properties` sets the major version. Each successful
 release increments the minor, starting at `0.0` for major `0`. Change
@@ -81,7 +112,7 @@ To check the Maven packages locally without uploading them, run both commands
 in order:
 
 ```sh
-./gradlew -PverifyPublication :myrelib:publishAllPublicationsToVerificationRepository :processor:publishAllPublicationsToVerificationRepository
+./gradlew -PverifyPublication :myrelib:publishAllPublicationsToVerificationRepository :processor:publishAllPublicationsToVerificationRepository :yb:publishAllPublicationsToVerificationRepository
 ./gradlew -PverifyPublication :testbot:testDebugUnitTest :testbot:assembleRelease
 ```
 
@@ -91,10 +122,10 @@ in order:
 - `myrelib/src/test/`: framework JVM tests.
 - `processor/`: KSP auton wrapper generator, built as a JVM JAR.
 - `testbot/`: standalone consumer sandbox with sample robot and opmodes.
+- `yb/`: Gradle plugin and launcher for YB in Android Studio.
 
-The three modules are separate top-level Gradle projects. The sandbox depends on
-`:myrelib` and applies `:processor` through KSP; neither reusable module depends
-on the sandbox. See [the sandbox guide](testbot/README.md) for its setup
+The sandbox depends on `:myrelib` and applies `:processor` through KSP. The YB
+plugin is used by the consumer's Gradle build. See [the sandbox guide](testbot/README.md) for its setup
 and examples.
 
 ## Component lifetime
